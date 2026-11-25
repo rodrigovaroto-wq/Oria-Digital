@@ -593,7 +593,7 @@ const setorialDe = (i, corpoOuResp, { cru = false } = {}) => {
   const http = cru ? corpoOuResp : resp(200, typeof corpoOuResp === 'string' ? corpoOuResp : JSON.stringify(corpoOuResp));
   return rodarCode('Ler SIDRA Setorial', {
     itens: [http],
-    porNome: { 'Séries SIDRA Setorial': { __tabela: s.tabela, __variavel: s.variavel, __periodicidade: s.periodicidade } },
+    porNome: { 'Séries SIDRA Setorial': rodarCode('Séries SIDRA Setorial')[i].json },
   })[0].json.__consulta;
 };
 // DERIVAÇÃO (não é resposta real): troca o V de linhas da fixture real por um símbolo de
@@ -852,5 +852,49 @@ test('A3.4: a consulta que falhou diz qual tabela do SIDRA caiu', () => {
     const c = setorialDe(4, r, { cru: true });
     assert.equal(c.itens, null);
     assert.ok(c.erro && c.erro.includes(s.tabela + '/' + s.variavel), 'erro sem a tabela: ' + c.erro);
+  }
+});
+
+// Achado MÉDIO da revisão de 7e2b1f8: no emprego (Mil pessoas, grandeza que SE SOMA) o Total vinha
+// junto das componentes sem marca; somar os fatos de um período dava o dobro. Resposta REAL.
+test('A3.4: o total vem marcado como agregado, e somar só os não agregados não conta duas vezes', () => {
+  const itens = setorialDe(5, fixSidra('emp')).itens;
+  for (const per of new Set(itens.map((f) => f.valor.periodo))) {
+    const doPer = itens.filter((f) => f.valor.periodo === per);
+    const tot = doPer.filter((f) => f.valor.agregado);
+    assert.equal(tot.length, 1, per + ': um agregado só');
+    assert.equal(tot[0].valor.categoria, 'Total');
+    const soma = doPer.filter((f) => !f.valor.agregado).reduce((a, f) => a + f.valor.valor, 0);
+    // As componentes NÃO fecham exatamente no Total (202608: 103439 x 103477, arredondamento do
+    // IBGE): a afirmação é "da ordem do Total", não "igual"; com o Total junto daria ~2x.
+    assert.ok(Math.abs(soma / tot[0].valor.valor - 1) < 0.01, per + ': componentes somam ' + soma);
+  }
+});
+
+// A lista de agregados não pode citar código que a resposta REAL não traz (envelhece em silêncio se o
+// IBGE renumerar): todo código da lista aparece como fato agregado na resposta real.
+test('A3.4: todo agregado da lista existe na resposta real do IBGE', () => {
+  FIX.forEach((nome, i) => {
+    const marcados = new Set(setorialDe(i, fixSidra(nome)).itens.filter((f) => f.valor.agregado).map((f) => f.valor.categoria_codigo));
+    for (const cod of SIDRA_SETORIAL[i].agregados) assert.ok(marcados.has(cod), nome + ': agregado ' + cod + ' ausente da resposta');
+  });
+});
+
+// Achado BAIXO da revisão de 7e2b1f8: "202602" é fevereiro na PIM e o 2º trimestre no PIB.
+// mes_final é o último mês coberto, e é por ele que séries de periodicidades diferentes se comparam.
+test('A3.4: mes_final põe mês, trimestre e trimestre móvel na mesma régua', () => {
+  const mf = (i, nome) => [...new Set(setorialDe(i, fixSidra(nome)).itens.map((f) => f.valor.periodo + '>' + f.valor.mes_final))].sort();
+  assert.deepEqual(mf(0, 'pib'), ['202601>2026-03', '202602>2026-06']);
+  assert.deepEqual(mf(1, 'pim'), ['202608>2026-08', '202609>2026-09']);
+  assert.deepEqual(mf(5, 'emp'), ['202608>2026-08', '202609>2026-09']);
+});
+
+// Achado BAIXO da revisão de f5147ab: sem a série identificada, o motivo de um não-2xx virava
+// "SIDRA undefined/undefined: HTTP 500" e a guarda não dizia o que de fato aconteceu.
+test('A3.4: chamada sem série identificada diz isso, falhe a chamada ou não, e não grava fato', () => {
+  for (const r of [resp(500, 'erro'), resp(200, JSON.stringify(fixSidra('pms')))]) {
+    const c = rodarCode('Ler SIDRA Setorial', { itens: [r], porNome: { 'Séries SIDRA Setorial': {} } })[0].json.__consulta;
+    assert.match(c.erro, /^não foi possível identificar a série/);
+    assert.equal(c.itens, null);
   }
 });

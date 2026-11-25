@@ -547,14 +547,30 @@ export function itensSgsExtra(sgs, meta) {
 // ---------------------------------------------------------------------------
 export const JANELA_SIDRA_SETORIAL = 2;
 
+// AGREGADOS: as categorias que CONTÊM outras categorias da mesma resposta (total, seção, grupo).
+// Achado MÉDIO da revisão de 7e2b1f8: no emprego (6323, Mil pessoas, grandeza que SE SOMA) o Total
+// vinha junto das componentes sem marca, e a soma de todos os fatos de um período dava o dobro
+// (202608: Total 103477; componentes 103439). O fato leva agregado: true|false, e quem soma
+// entre categorias soma só agregado false. Origem de cada lista, conferida em 25/11/2026:
+//  - 8688, 8882, 6323: a hierarquia do metadado do IBGE (servicodados /agregados/<t>/metadados:
+//    categoria seguida de outra de nível maior é pai).
+//  - 5932 e 8888: o metadado põe todas no nível 0; a lista vem do nome e da numeração da própria
+//    categoria (5932: "Indústria - total", "Serviços - total", "Valor adicionado a preços
+//    básicos", "PIB a preços de mercado"; 8888: "1 Indústria geral", "3 Indústrias de
+//    transformação", que contém as 3.xx). "Agropecuária - total" NÃO entra: não há subsetor dela.
+//  - 8880: uma categoria só.
+// TETO: se o IBGE renumerar uma categoria, o código some da lista sem erro e o fato sai com
+// agregado false; o teste com a resposta real acusa código da lista ausente da resposta.
 export const SIDRA_SETORIAL = [
-  { tabela: 5932, variavel: 6561, classes: '/c11255/all', periodicidade: 'trimestral' },
-  { tabela: 8888, variavel: 11602, classes: '/c544/all', periodicidade: 'mensal' },
-  { tabela: 8880, variavel: 11709, classes: '/c11046/56734', periodicidade: 'mensal' },
-  { tabela: 8882, variavel: 11709, classes: '/c11046/56734/c85/all', periodicidade: 'mensal' },
-  { tabela: 8688, variavel: 11624, classes: '/c11046/56726/c12355/all', periodicidade: 'mensal' },
+  { tabela: 5932, variavel: 6561, classes: '/c11255/all', periodicidade: 'trimestral',
+    agregados: ['90691', '90696', '90705', '90707'] },
+  { tabela: 8888, variavel: 11602, classes: '/c544/all', periodicidade: 'mensal', agregados: ['129314', '129316'] },
+  { tabela: 8880, variavel: 11709, classes: '/c11046/56734', periodicidade: 'mensal', agregados: [] },
+  { tabela: 8882, variavel: 11709, classes: '/c11046/56734/c85/all', periodicidade: 'mensal', agregados: ['90672', '2759'] },
+  { tabela: 8688, variavel: 11624, classes: '/c11046/56726/c12355/all', periodicidade: 'mensal',
+    agregados: ['107071', '106869', '106870', '106874', '31397', '31399', '31421', '106876', '31422', '31426'] },
   // PNAD Contínua: trimestre MÓVEL (o código D3C AAAAMM é o último mês do trimestre).
-  { tabela: 6323, variavel: 4090, classes: '/c888/all', periodicidade: 'trimestre_movel' },
+  { tabela: 6323, variavel: 4090, classes: '/c888/all', periodicidade: 'trimestre_movel', agregados: ['47946'] },
 ];
 
 export function urlSidraSetorial(s, n = JANELA_SIDRA_SETORIAL) {
@@ -567,6 +583,25 @@ export function urlSidraSetorial(s, n = JANELA_SIDRA_SETORIAL) {
 // ocorreram, vai em cada fato da consulta (ausentes_na_consulta, ausentes_em), para o
 // leitor saber que a série tem buraco em vez de supor completude. Zero fato num 2xx
 // nunca vira "nada encontrado": é erro (falhou), como em consultaSgs.
+// O ÚLTIMO MÊS coberto pelo período, AAAA-MM: a chave que compara séries de periodicidades
+// diferentes. Achado BAIXO da revisão de 7e2b1f8: "202602" é fevereiro na PIM e o 2º trimestre no
+// PIB, e o cruzamento por periodo casava um com o outro. Trimestral (AAAA0T) -> mês 3T; mensal e
+// trimestre móvel (o código já é o último mês) -> o próprio mês. Periodicidade desconhecida ou
+// código fora do formato -> null (nunca um mês adivinhado).
+export function mesFinalSidra(per, periodicidade) {
+  const mm = String(per || '').match(/^(\d{4})(\d{2})$/);
+  if (!mm) return null;
+  if (periodicidade === 'trimestral') {
+    const t = Number(mm[2]);
+    return t >= 1 && t <= 4 ? mm[1] + '-' + String(t * 3).padStart(2, '0') : null;
+  }
+  if (periodicidade === 'mensal' || periodicidade === 'trimestre_movel') {
+    const mes = Number(mm[2]);
+    return mes >= 1 && mes <= 12 ? mm[1] + '-' + mm[2] : null;
+  }
+  return null;
+}
+
 export function consultaSidraSetorial(resp, meta, opcoes) {
   const m = meta || {};
   const l = lerRespostaHttp(resp, (opcoes || {}).campo);
@@ -616,6 +651,7 @@ export function consultaSidraSetorial(resp, meta, opcoes) {
       valor: {
         periodo: per, periodo_nome: o.D3N, categoria_codigo: cod, categoria: o['D' + ultima + 'N'], valor: v,
         unidade: o.MN, compoe: false, periodicidade: m.periodicidade, serie: o.D2N, dimensoes: dims,
+        agregado: (m.agregados || []).indexOf(cod) >= 0, mes_final: mesFinalSidra(per, m.periodicidade),
       },
       referencia: 'sidra.' + m.tabela + '.' + m.variavel + ':' + codDims + cod + ':' + per,
     });

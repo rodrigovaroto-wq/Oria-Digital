@@ -19,7 +19,7 @@ import {
   lerRespostaHttp, consultaSgs, consultaFocus, consultaSidra,
   JUROS_PJ_SGS, urlSgsUltimos, itensJuros,
   SGS_EXTRA, JANELA_SGS_EXTRA, itensSgsExtra,
-  SIDRA_SETORIAL, urlSidraSetorial, consultaSidraSetorial,
+  SIDRA_SETORIAL, urlSidraSetorial, consultaSidraSetorial, mesFinalSidra,
 } from './lib/macro.mjs';
 
 // `numeroMacro` EMBUTIDA do fonte, não copiada à mão. É o padrão que o gerador da
@@ -371,7 +371,7 @@ return { json: { __consulta: c.consulta } };`,
   node('Séries SIDRA Setorial', 'n8n-nodes-base.code', 2, {
     jsCode: `return ${JSON.stringify(
       SIDRA_SETORIAL.map((s) => ({ json: {
-        __tabela: s.tabela, __variavel: s.variavel, __periodicidade: s.periodicidade, __url: urlSidraSetorial(s),
+        __tabela: s.tabela, __variavel: s.variavel, __periodicidade: s.periodicidade, __agregados: s.agregados, __url: urlSidraSetorial(s),
       } })),
     )};`,
   }),
@@ -382,11 +382,17 @@ return { json: { __consulta: c.consulta } };`,
 
   node('Ler SIDRA Setorial', 'n8n-nodes-base.code', 2, {
     mode: 'runOnceForEachItem',
-    jsCode: embutir(consultaSidraSetorial) + `
+    jsCode: embutir(consultaSidraSetorial, mesFinalSidra) + `
 let ctx = {};
 try { ctx = $('Séries SIDRA Setorial').item.json; } catch (e) { ctx = {}; }
-const c = consultaSidraSetorial($json, { tabela: ctx.__tabela, variavel: ctx.__variavel, periodicidade: ctx.__periodicidade }, { campo: ${CAMPO} });
-if (!ctx.__tabela && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';
+const c = consultaSidraSetorial($json, { tabela: ctx.__tabela, variavel: ctx.__variavel, periodicidade: ctx.__periodicidade, agregados: ctx.__agregados }, { campo: ${CAMPO} });
+// Série não identificada: diz isso SEMPRE, inclusive quando a chamada também falhou (achado BAIXO
+// da revisão de f5147ab: no não-2xx o motivo virava "SIDRA undefined/undefined: HTTP 500").
+// Sem série, nenhum fato se grava: um fato sem tabela não diz o que mede.
+if (!ctx.__tabela) {
+  c.consulta.erro = 'não foi possível identificar a série desta chamada' + (c.consulta.erro ? ' (' + c.consulta.erro + ')' : '');
+  c.consulta.itens = null;
+}
 return { json: { __consulta: c.consulta } };`,
   }),
 
