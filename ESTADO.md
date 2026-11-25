@@ -11,6 +11,8 @@
 >
 > **NÃO CONFERIDO NO FECHAMENTO desta rodada:** a sessão de fechamento não acessou o banco nem o n8n. Os números acima são os medidos pela sessão 140, registrados aqui. A **execução AGENDADA de 26/11 06h (09:00 UTC) ainda não aconteceu** (hoje é 25/11).
 
+> **Achados deixados, CORRIGIDOS antes do merge (pedido do dono, 25/11, ~21:45 UTC):** `e70ab01` (fato com `agregado` — no emprego as componentes somam 103.439 × Total 103.477, sem contar duas vezes; `mes_final` AAAA-MM põe mês, trimestre e trimestre móvel na mesma régua; série não identificada diz isso e não grava fato), `cdbb0f3` (testes de mecanismo trocados por comportamento; assert vazio removido), `6bfe67d` (ALTO da revisão de `cdbb0f3`: o teste de ordem passava VAZIO quando uma aresta sumia — agora exige que todo registro e todo nó que lança sejam alcançáveis; 1 teste reprova por aresta removida), e o teste que iguala a lista de agregados à hierarquia do metadado do IBGE (8688, 8882, 6323). Macro 59/59. **Republicado de novo (34 nós) e executado: 10053 `success`, 43 consultas `encontrado`, agregados e `mes_final` gravados nas 6 séries; banco 113 MB.** Nenhum achado deixado.
+
 ### ▶ PRÓXIMA SESSÃO — COMECE AQUI: conferir a agenda de 26/11 e seguir para a fonte 5 (CVM)
 
 - **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado), continuação. Leia ESTADO.md sessão 140 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: conferir a execução AGENDADA de 26/11 06h (09:00 UTC) do macro (workflow UGhv57BU3YNukVxV): esperado 43 consultas "encontrado" (ibge_sidra 7) e cerca de 267 fatos na execução (202 setoriais + 65). Depois a fonte 5 (CVM): medir o banco antes (113 MB em 25/11 21:34 UTC) e guardar só os campos usados.
