@@ -3,9 +3,9 @@
 
 ## SESSÃO 140 (25/11/2026) — A3 fonte 4: IBGE/SIDRA setorial EM PRODUÇÃO (macro republicado com 34 nós, execução 10052 `success`)
 
-> **Migration mais nova: continua `0304`.** Nenhuma migration nova na sessão 140: o catálogo `ibge_sidra` já existia (cadência nula, prazo 1 dia).
+> **Migration mais nova: continua `0304_a_fonte_que_dizia_mensal_e_rodava_todo_dia.sql`.** Nenhuma migration nova na sessão 140: o catálogo `ibge_sidra` já existia (cadência nula, prazo 1 dia).
 >
-> **Branch:** `claude/charming-cori-j1fa07`, commits `7e2b1f8` (fonte 4) e `f5147ab` (correção da revisão). **PR: ainda não aberto** (a sessão principal abre). Portal não tocado.
+> **Branch:** `claude/charming-cori-j1fa07`, commits `7e2b1f8` (fonte 4) e `f5147ab` (correção da revisão). PR [#318](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/318). Portal não tocado.
 >
 > **Produção (medido pela sessão 140, 25/11/2026, 21:21 a 21:33 UTC):** macro republicado da branch com `N8N_CRED_IDS='{"Supabase Postgres":"D7NYaWY1UYKy2vBc"}'` (34 nós, "PUBLICADO E CONFERIDO"). Execução 10052 por cópia com webhook: `success` em 12 s, 43 consultas `encontrado` (12 bcb_sgs, 19 bcb_juros_modalidade, 5 bcb_focus, 7 ibge_sidra), 202 fatos setoriais além dos 65 de sempre. Banco: 113 MB de 500 MB.
 >
