@@ -1,7 +1,7 @@
 // Gerador do workflow de ÍNDICES MACROECONÔMICOS (Supabase/migrations/0025).
 //
 // Workflow separado do de ingestão de propósito: ele não tem nada a ver com
-// documento de mandato. Roda no relógio (mensal), não no upload; falha dele não
+// documento de mandato. Roda no relógio (diário), não no upload; falha dele não
 // pode derrubar a ingestão; e o dono pode reimportar/desligar um sem tocar no
 // outro.
 //
@@ -14,13 +14,23 @@ import { posicionar } from './layout.mjs';
 import { renameSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SERIES_MACRO, INDICADORES_FOCUS, urlSgs, urlFocus, urlSidraIpca, numeroMacro } from './lib/macro.mjs';
+import {
+  SERIES_MACRO, INDICADORES_FOCUS, urlSgs, urlFocus, urlSidraIpca, numeroMacro,
+  lerRespostaHttp, consultaSgs, consultaFocus, consultaSidra,
+  JUROS_PJ_SGS, urlSgsUltimos, itensJuros,
+  SGS_EXTRA, JANELA_SGS_EXTRA, itensSgsExtra,
+} from './lib/macro.mjs';
 
 // `numeroMacro` EMBUTIDA do fonte, não copiada à mão. É o padrão que o gerador da
 // ingestão já usa cinco vezes (prompt, ALIASES, diagnosticarErroApi, parseEntidade,
 // orçamento) exatamente porque a cópia à mão deste repositório já divergiu — e este
 // arquivo era o último mirror manual que restava.
 const FONTE_NUMERO_MACRO = `const numeroMacro = ${numeroMacro.toString()};`;
+
+// Idem para o registro da consulta (A3 fatia 0): as funções que montam o desfecho
+// cru de cada chamada HTTP moram em lib/macro.mjs e são embutidas por toString.
+const FONTE_CONSULTA = [numeroMacro, lerRespostaHttp].map((f) => f.toString()).join('\n');
+const embutir = (...fns) => [FONTE_CONSULTA, ...fns.map((f) => f.toString())].join('\n');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +41,7 @@ const node = (name, type, typeVersion, parameters, opts = {}) => ({
   position: [0, 0],
   ...(opts.credentials ? { credentials: opts.credentials } : {}),
   ...(opts.onError ? { onError: opts.onError } : {}),
+  ...(opts.alwaysOutputData ? { alwaysOutputData: true } : {}),
   ...(opts.retryOnFail ? { retryOnFail: true, maxTries: opts.maxTries ?? 3, waitBetweenTries: 5000 } : {}),
 });
 
@@ -39,6 +50,25 @@ const node = (name, type, typeVersion, parameters, opts = {}) => ({
 // coleta das outras — o mês volta na execução seguinte (a ingestão é
 // idempotente por (serie, fonte, data_ref)).
 const HTTP_TOLERANTE = { onError: 'continueRegularOutput', retryOnFail: true, maxTries: 3 };
+
+// O nó HTTP entrega UM item por chamada com { statusCode, body: TEXTO CRU }:
+//   - fullResponse: o status real chega (sem ele um 500 virava "corpo de erro" anônimo);
+//   - responseFormat text: o corpo exato é a prova de leitura (o banco grava o sha256
+//     dele) e o array do SGS deixa de ser explodido em ~132 itens por série (o que
+//     obrigava o parse a adivinhar de qual chamada cada item veio);
+//   - neverError: 4xx/5xx chegam como statusCode em vez de exceção;
+//   - timeout 60 s: chamada que nunca responde vira { error } (status nulo -> falhou)
+//     em vez de pendurar a execução.
+//   - outputPropertyName EXPLÍCITO: com text + fullResponse o corpo NÃO vai em "body", vai
+//     neste campo (default "data" no HttpRequestV3, typeVersion 4.2). Fixar aqui e passar o
+//     mesmo nome aos nós Ler (CAMPO) impede que uma troca de default quebre a leitura em
+//     silêncio: o teste lê o campo DESTA opção no JSON gerado.
+const CAMPO_CORPO = 'corpo_cru';
+const CAMPO = JSON.stringify(CAMPO_CORPO);
+const HTTP_OPCOES = {
+  response: { response: { fullResponse: true, neverError: true, responseFormat: 'text', outputPropertyName: CAMPO_CORPO } },
+  timeout: 60000,
+};
 
 // 132 meses = 11 anos: cobre a média de 10 anos com folga para o ano corrente
 // incompleto. Rebaixar a janela inteira todo mês é de propósito — é assim que
@@ -186,15 +216,31 @@ return [{ json: { expectativas: obs, n: obs.length } }];
 const PG = { credentials: { postgres: { id: 'REPLACE', name: 'Supabase Postgres' } },
   onError: 'continueRegularOutput', retryOnFail: true, maxTries: 3 };
 
+// Registro da consulta pelo ponto ÚNICO de escrita (0303). O parâmetro é UM jsonb (o
+// mesmo padrão de Gravar Índices): o corpo cru tem vírgula e o n8n separaria um
+// queryReplacement com vírgula em vários parâmetros. p_caso e p_alvo_cnpj nulos e
+// p_custo 0: fonte de mercado, gratuita. O nullif devolve SQL NULL para itens JSON
+// null (p->'itens' de um null JSON seria o jsonb 'null', não NULL).
+const SQL_CONSULTA = "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', "
+  + "nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q";
+
+// Registrar a consulta NUNCA derruba o caminho dos dados: erro vira item (continueRegularOutput),
+// e alwaysOutputData garante saída mesmo sem linha, para o fluxo seguir.
+const PG_CONSULTA = { ...PG, alwaysOutputData: true };
+
 const nodes = [
-  node('Agenda Mensal', 'n8n-nodes-base.scheduleTrigger', 1.2, {
-    rule: { interval: [{ field: 'months', triggerAtDayOfMonth: 12, triggerAtHour: 6 }] },
+  node('Agenda Diária', 'n8n-nodes-base.scheduleTrigger', 1.2, {
+    rule: { interval: [{ field: 'days', daysInterval: 1, triggerAtHour: 6 }] },
   }),
 
-  // Dia 12 e não dia 1: o IPCA do mês anterior é divulgado pelo IBGE por volta
-  // do dia 10. Coletar antes disso traria o mês sempre incompleto e faria a
-  // conferência entre fontes acusar divergência todo mês por atraso de
-  // publicação, não por erro.
+  // DIÁRIO (decisão do dono, 25/11/2026), era mensal no dia 12. Medido em 25/11: o
+  // IPCA de outubro já estava na API do SGS (0,14) e só entraria em 12/12 — até 17
+  // dias de atraso. Diário também faz cada execução ser um sinal de vida: o banco
+  // passa a ter 12 consultas por dia (consulta_externa), e a ausência de uma delas
+  // é o que distingue "não rodou" de "rodou e não achou nada" (regra 7).
+  // O motivo do dia 12 (esperar o IBGE publicar o IPCA para a conferência entre
+  // fontes não acusar atraso) não some: fn_divergencias_indice_macro só compara
+  // meses presentes nas DUAS fontes, então mês só numa delas não é divergência.
 
   node('Séries a Coletar', 'n8n-nodes-base.code', 2, {
     jsCode: `return ${JSON.stringify(
@@ -203,22 +249,119 @@ const nodes = [
   }),
 
   node('BCB SGS', 'n8n-nodes-base.httpRequest', 4.2, {
-    url: '={{ $json.__url }}', options: { response: { response: { neverError: true } } },
+    url: '={{ $json.__url }}', options: HTTP_OPCOES,
   }, HTTP_TOLERANTE),
 
-  node('Manter Contexto SGS', 'n8n-nodes-base.code', 2, {
+  // UMA consulta por SÉRIE chamada (6 por execução), não uma por execução: com uma só,
+  // o 200 das cinco séries boas esconderia o 500 da sexta. Cada série tem o seu
+  // desfecho, e a que caiu aparece como falhou com o status dela.
+  node('Ler SGS', 'n8n-nodes-base.code', 2, {
     mode: 'runOnceForEachItem',
-    jsCode: "return { json: { __serie: $('Séries a Coletar').item.json.__serie, __fonte: 'BCB/SGS', __corpo: $json } };",
+    jsCode: embutir(consultaSgs) + `
+let serie = null;
+try { serie = $('Séries a Coletar').item.json.__serie; } catch (e) { serie = null; }
+const c = consultaSgs($json, serie || 'SGS', { campo: ${CAMPO} });
+return { json: { __serie: serie, __fonte: 'BCB/SGS', __corpo: c.dado, __consulta: c.consulta } };`,
+  }),
+
+  node('Registrar Consulta SGS', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
+
+  // Retoma o caminho dos DADOS depois do registro. Lê o 'Ler SGS' pelo nome e não o
+  // que o registro devolveu: assim a gravação não depende do resultado do registro
+  // (que continua mesmo se o banco recusar a consulta), e a falha do Normalizar,
+  // que lança de propósito, só acontece DEPOIS de a consulta já estar gravada.
+  node('Manter Contexto SGS', 'n8n-nodes-base.code', 2, {
+    jsCode: "return $('Ler SGS').all().map((i) => ({ json: { __serie: i.json.__serie, __fonte: i.json.__fonte, __corpo: i.json.__corpo } }));",
   }),
 
   node('IBGE SIDRA (IPCA)', 'n8n-nodes-base.httpRequest', 4.2, {
     url: urlSidraIpca({ ultimos: MESES_HISTORICO }),
-    options: { response: { response: { neverError: true } } },
+    options: HTTP_OPCOES,
   }, HTTP_TOLERANTE),
 
-  node('Marcar Fonte IBGE', 'n8n-nodes-base.code', 2, {
-    jsCode: "return [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: $input.all().map(i => i.json) } }];",
+  node('Ler SIDRA', 'n8n-nodes-base.code', 2, {
+    jsCode: embutir(consultaSidra) + `
+const c = consultaSidra(($input.all()[0] || {}).json, { campo: ${CAMPO} });
+return [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: c.dado, __consulta: c.consulta } }];`,
   }),
+
+  node('Registrar Consulta SIDRA', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
+
+  node('Marcar Fonte IBGE', 'n8n-nodes-base.code', 2, {
+    jsCode: "return $('Ler SIDRA').all().map((i) => ({ json: { __serie: i.json.__serie, __fonte: i.json.__fonte, __corpo: i.json.__corpo } }));",
+  }),
+
+  // A3 fatia 1: taxa média de juros por modalidade PJ (BCB/SGS), fonte bcb_juros_modalidade.
+  // No MESMO workflow diário (um gatilho, uma credencial, um lugar para o dono olhar), mas
+  // numa corrente PRÓPRIA e só de registro: os dados vão para fato_externo, não para
+  // indice_macro_obs (a aba Macro do cliente não muda; é a A5). Uma consulta por série, e a
+  // lista (19 de 24 códigos) e a janela de 2 meses estão justificadas em lib/macro.mjs.
+  node('Séries Juros', 'n8n-nodes-base.code', 2, {
+    jsCode: `return ${JSON.stringify(
+      JUROS_PJ_SGS.map((s) => ({ json: { __sgs: s.sgs, __nome: s.nome, __url: urlSgsUltimos(s.sgs) } })),
+    )};`,
+  }),
+
+  node('BCB Juros', 'n8n-nodes-base.httpRequest', 4.2, {
+    url: '={{ $json.__url }}', options: HTTP_OPCOES,
+  }, HTTP_TOLERANTE),
+
+  node('Ler Juros', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForEachItem',
+    jsCode: embutir(consultaSgs, itensJuros) + `
+let ctx = {};
+try { ctx = $('Séries Juros').item.json; } catch (e) { ctx = {}; }
+const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { campo: ${CAMPO}, fonte: 'bcb_juros_modalidade', itens: itensJuros(ctx.__sgs, ctx.__nome) });
+if (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';
+return { json: { __consulta: c.consulta } };`,
+  }),
+
+  node('Registrar Consulta Juros', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
+
+  node('Chamar SIDRA', 'n8n-nodes-base.code', 2, { jsCode: 'return [{ json: {} }];' }),
+
+  node('Retomar Dados', 'n8n-nodes-base.code', 2, { jsCode: 'return [{ json: {} }];' }),
+
+  // A3 fatia 2: IBC-Br, crédito/inadimplência PJ e euro (BCB/SGS, fonte bcb_sgs) -> fato_externo.
+  // Mesmo desenho dos juros: uma consulta por série, só registro, na corrente linear ANTES de
+  // qualquer nó que lance. A lista (só série com nome confirmado), a janela por periodicidade
+  // e a unidade de cada uma estão justificadas em lib/macro.mjs.
+  node('Séries SGS Extra', 'n8n-nodes-base.code', 2, {
+    jsCode: `return ${JSON.stringify(
+      SGS_EXTRA.map((s) => ({ json: {
+        __sgs: s.sgs, __meta: { nome: s.nome, natureza: s.natureza, unidade: s.unidade, periodicidade: s.periodicidade },
+        __url: urlSgsUltimos(s.sgs, JANELA_SGS_EXTRA[s.periodicidade]),
+      } })),
+    )};`,
+  }),
+
+  node('BCB SGS Extra', 'n8n-nodes-base.httpRequest', 4.2, {
+    url: '={{ $json.__url }}', options: HTTP_OPCOES,
+  }, HTTP_TOLERANTE),
+
+  node('Ler SGS Extra', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForEachItem',
+    jsCode: embutir(consultaSgs, itensSgsExtra) + `
+let ctx = {};
+try { ctx = $('Séries SGS Extra').item.json; } catch (e) { ctx = {}; }
+const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { campo: ${CAMPO}, itens: itensSgsExtra(ctx.__sgs, ctx.__meta || {}) });
+if (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';
+return { json: { __consulta: c.consulta } };`,
+  }),
+
+  node('Registrar Consulta SGS Extra', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
 
   node('Normalizar Observações', 'n8n-nodes-base.code', 2, { jsCode: CODE_NORMALIZAR }),
 
@@ -245,12 +388,26 @@ const nodes = [
   }),
 
   node('BCB Focus', 'n8n-nodes-base.httpRequest', 4.2, {
-    url: '={{ $json.__url }}', options: { response: { response: { neverError: true } } },
+    url: '={{ $json.__url }}', options: HTTP_OPCOES,
   }, HTTP_TOLERANTE),
 
-  node('Manter Contexto Focus', 'n8n-nodes-base.code', 2, {
+  // Uma consulta por INDICADOR (5 por execução), pelo mesmo motivo do SGS.
+  node('Ler Focus', 'n8n-nodes-base.code', 2, {
     mode: 'runOnceForEachItem',
-    jsCode: "return { json: { __serie: $('Indicadores Focus').item.json.__serie, __corpo: $json } };",
+    jsCode: embutir(consultaFocus) + `
+let serie = null;
+try { serie = $('Indicadores Focus').item.json.__serie; } catch (e) { serie = null; }
+const c = consultaFocus($json, serie || 'Focus', { campo: ${CAMPO} });
+return { json: { __serie: serie, __corpo: c.dado, __consulta: c.consulta } };`,
+  }),
+
+  node('Registrar Consulta Focus', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
+
+  node('Manter Contexto Focus', 'n8n-nodes-base.code', 2, {
+    jsCode: "return $('Ler Focus').all().map((i) => ({ json: { __serie: i.json.__serie, __corpo: i.json.__corpo } }));",
   }),
 
   node('Normalizar Focus', 'n8n-nodes-base.code', 2, { jsCode: CODE_FOCUS }),
@@ -262,23 +419,47 @@ const nodes = [
   }, PG),
 ];
 
+const liga = (...nomes) => ({ main: [nomes.map((node) => ({ node, type: 'main', index: 0 }))] });
+// ORDEM DETERMINÍSTICA, por CORRENTE ÚNICA: todas as consultas (Juros, SGS, Focus, SIDRA) são
+// registradas uma depois da outra, e SÓ ENTÃO os dados seguem para os normalizadores. Era o
+// risco da fatia 1: com os ramos em paralelo a partir do gatilho, o throw do Normalizar (zero
+// observação, de propósito) podia abortar a execução antes de outro ramo registrar a sua
+// consulta, e a ordem entre ramos do n8n (executionOrder v1) vem da POSIÇÃO no canvas, não
+// do grafo. Em corrente linear não há ramo concorrente: a ordem é a das arestas. Os dados
+// são lidos pelo NOME do nó Ler (não pelo que o registro devolveu), então a corrente não os
+// altera; o registro (onError continue + alwaysOutputData) nunca interrompe a corrente.
+// Cada passo que alimenta um HTTP de chamada única passa por um nó Code (roda UMA vez,
+// qualquer que seja o nº de itens que chegou), senão o HTTP rodaria uma vez por item.
 const connections = {
-  'Agenda Mensal': { main: [[
-    { node: 'Séries a Coletar', type: 'main', index: 0 },
-    { node: 'IBGE SIDRA (IPCA)', type: 'main', index: 0 },
-    { node: 'Indicadores Focus', type: 'main', index: 0 },
-  ]] },
-  'Séries a Coletar': { main: [[{ node: 'BCB SGS', type: 'main', index: 0 }]] },
-  'BCB SGS': { main: [[{ node: 'Manter Contexto SGS', type: 'main', index: 0 }]] },
-  'Manter Contexto SGS': { main: [[{ node: 'Normalizar Observações', type: 'main', index: 0 }]] },
-  'IBGE SIDRA (IPCA)': { main: [[{ node: 'Marcar Fonte IBGE', type: 'main', index: 0 }]] },
-  'Marcar Fonte IBGE': { main: [[{ node: 'Normalizar Observações', type: 'main', index: 0 }]] },
-  'Normalizar Observações': { main: [[{ node: 'Gravar Índices', type: 'main', index: 0 }]] },
-  'Gravar Índices': { main: [[{ node: 'Conferir Fontes', type: 'main', index: 0 }]] },
-  'Indicadores Focus': { main: [[{ node: 'BCB Focus', type: 'main', index: 0 }]] },
-  'BCB Focus': { main: [[{ node: 'Manter Contexto Focus', type: 'main', index: 0 }]] },
-  'Manter Contexto Focus': { main: [[{ node: 'Normalizar Focus', type: 'main', index: 0 }]] },
-  'Normalizar Focus': { main: [[{ node: 'Gravar Expectativas', type: 'main', index: 0 }]] },
+  'Agenda Diária': liga('Séries Juros'),
+  'Séries Juros': liga('BCB Juros'),
+  'BCB Juros': liga('Ler Juros'),
+  'Ler Juros': liga('Registrar Consulta Juros'),
+  'Registrar Consulta Juros': liga('Séries SGS Extra'),
+  'Séries SGS Extra': liga('BCB SGS Extra'),
+  'BCB SGS Extra': liga('Ler SGS Extra'),
+  'Ler SGS Extra': liga('Registrar Consulta SGS Extra'),
+  'Registrar Consulta SGS Extra': liga('Séries a Coletar'),
+  'Séries a Coletar': liga('BCB SGS'),
+  'BCB SGS': liga('Ler SGS'),
+  'Ler SGS': liga('Registrar Consulta SGS'),
+  'Registrar Consulta SGS': liga('Indicadores Focus'),
+  'Indicadores Focus': liga('BCB Focus'),
+  'BCB Focus': liga('Ler Focus'),
+  'Ler Focus': liga('Registrar Consulta Focus'),
+  'Registrar Consulta Focus': liga('Chamar SIDRA'),
+  'Chamar SIDRA': liga('IBGE SIDRA (IPCA)'),
+  'IBGE SIDRA (IPCA)': liga('Ler SIDRA'),
+  'Ler SIDRA': liga('Registrar Consulta SIDRA'),
+  // Aqui TODAS as consultas já foram gravadas. Daqui em diante pode lançar.
+  'Registrar Consulta SIDRA': liga('Retomar Dados'),
+  'Retomar Dados': liga('Manter Contexto SGS', 'Marcar Fonte IBGE', 'Manter Contexto Focus'),
+  'Manter Contexto SGS': liga('Normalizar Observações'),
+  'Marcar Fonte IBGE': liga('Normalizar Observações'),
+  'Normalizar Observações': liga('Gravar Índices'),
+  'Gravar Índices': liga('Conferir Fontes'),
+  'Manter Contexto Focus': liga('Normalizar Focus'),
+  'Normalizar Focus': liga('Gravar Expectativas'),
 };
 
 // O canvas é desenhado a partir do grafo, nunca à mão (ver N8N/layout.mjs).
@@ -291,7 +472,7 @@ const workflow = {
   name: 'Oria SARF — Índices Macroeconômicos',
   nodes, connections, settings: { executionOrder: 'v1' },
   meta: {
-    note: 'Gerado por N8N/build-workflow-macro.mjs. Coleta mensal de IPCA/IGP-M/INPC/Selic/CDI/câmbio '
+    note: 'Gerado por N8N/build-workflow-macro.mjs. Coleta diária de IPCA/IGP-M/INPC/Selic/CDI/câmbio '
       + '(BCB/SGS), da expectativa Focus por ano e do IPCA no IBGE/SIDRA para conferência cruzada. '
       + 'A ingestão é idempotente por (serie, fonte, data_ref): rebaixar a janela toda vez é '
       + 'intencional — é assim que uma revisão de série feita pela fonte chega até nós.',

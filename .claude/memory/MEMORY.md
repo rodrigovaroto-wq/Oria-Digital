@@ -85,6 +85,7 @@ Uma linha por entrada; teto mole de 130 linhas não vazias.
 - [A ordem dos parâmetros dos dois classificadores é diferente](ordem-dos-classificadores.md)
 - ["TODO" em português vira achado do Sonar](todo-em-portugues-vira-achado-do-sonar.md) — a `S1135`
   casa o texto, não o idioma; cinco ocorrências até 13/09. Use `CADA`/`TODOS OS`
+- [No HTTP do n8n, o corpo cru vai para `outputPropertyName`, não para `body`](n8n-http-com-texto-cru-entrega-em-outputpropertyname.md) — default `data`; fixture inventada escondeu isso
 
 ## Produção (não está em nenhum arquivo do repositório)
 

@@ -270,3 +270,259 @@ export function mediaAnualGeometrica(retornosAnuais, janela) {
   return (Math.pow(fator, 1 / janela) - 1) * 100;
 }
 
+
+// ---------------------------------------------------------------------------
+// REGISTRO DA CONSULTA (A3, fatia 0): o desfecho CRU de cada chamada HTTP do macro
+// vai para fn_registrar_consulta_externa (0303), que é quem classifica.
+//
+// Por que existe: o macro rodava mensal e nada registrava que rodou — "rodou e
+// não achou nada" e "não rodou" tinham a mesma cara (regra 7). E um 500 do BCB com
+// neverError chegava como corpo, o Normalizar descartava, e só o throw do "zero
+// observação" aparecia, sem dizer QUAL série nem com que status.
+//
+// Estas funções são EMBUTIDAS nos nós Code pelo gerador (Function.toString), como
+// numeroMacro: nó Code do n8n não importa arquivo. Por isso cada uma é
+// autocontida (só chama as outras desta seção e numeroMacro, que o gerador
+// embute junto) e os comentários aqui dentro NÃO podem ter crase nem dólar-chave
+// (fecharia ou interpolaria o template literal do gerador).
+//
+// Contrato com o nó HTTP: options.response.response = { fullResponse: true,
+// neverError: true, responseFormat: 'text', outputPropertyName: <campo> }. Isso entrega UM
+// item por chamada com { headers, statusCode, statusMessage, [campo]: texto cru } — sem o
+// split do array em N itens e com o corpo exato de que o hash é a prova de leitura.
+// ATENÇÃO (defeito achado na revisão): com responseFormat text + fullResponse, o n8n NÃO
+// entrega o corpo em "body": entrega em outputPropertyName, cujo default é "data"
+// (HttpRequestV3.node.ts, ramo responseFormat text). Por isso o campo é parâmetro desta
+// função e o gerador o fixa EXPLÍCITO no nó e o passa a cada nó Ler: um lado sem o outro
+// lê null e grava 'falhou' com motivo falso em toda consulta. Chamada que nem respondeu
+// (timeout, DNS) chega pelo onError continueRegularOutput como { error }.
+// ---------------------------------------------------------------------------
+
+// Desfecho cru -> { http_status, erro, corpo, json }. NUNCA lança.
+//   - sem resposta        -> http_status null + erro com o motivo (a função grava falhou)
+//   - 2xx vazio/não-JSON  -> http_status 2xx + erro (a função grava falhou)
+//   - fora de 2xx         -> http_status real, erro null (a função grava falhou "HTTP 500")
+// Um 2xx sem erro tem json parseado: é o único caso em que o chamador pode montar itens.
+export function lerRespostaHttp(r, campo) {
+  const j = r || {};
+  const nomeCorpo = campo || 'data';
+  if (j.statusCode === undefined && j.error !== undefined) {
+    const e = j.error;
+    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);
+    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };
+  }
+  const st = Number(j.statusCode);
+  if (!Number.isInteger(st)) {
+    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };
+  }
+  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;
+  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };
+  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };
+  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };
+  try {
+    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };
+  } catch (e) {
+    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };
+  }
+}
+
+// SGS: uma consulta por SÉRIE chamada. Itens = RESUMO {ultimo_mes, n} (1 fato por
+// consulta), não as ~132 observações: estas já vão para indice_macro_obs.
+// Zero observação válida num 2xx nunca vira "nada encontrado": o SGS devolve 132
+// meses em toda chamada, então zero é resposta inesperada (mesmo critério do throw do Normalizar).
+// `opcoes` (A3 fatia 1, juros por modalidade) reusa este mesmo parse do SGS sem duplicá-lo:
+// { fonte, itens } troca a fonte do catálogo e monta os itens a partir das observações
+// válidas [{ data_ref: 'AAAA-MM-01', valor }]. Sem opcoes o comportamento é o de antes.
+export function consultaSgs(resp, serie, opcoes) {
+  const op = opcoes || {};
+  const l = lerRespostaHttp(resp, op.campo);
+  const c = { fonte: op.fonte || 'bcb_sgs', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  if (!Array.isArray(l.json)) {
+    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista de observações do SGS';
+    return { consulta: c, dado: null };
+  }
+  let n = 0, ultimo = '';
+  const validas = [];
+  for (const o of l.json) {
+    const m = String((o && o.data) || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m && numeroMacro(o.valor) !== null) {
+      n++; const iso = m[3] + '-' + m[2]; if (iso > ultimo) ultimo = iso;
+      validas.push({ data_ref: m[3] + '-' + m[2] + '-' + m[1], valor: numeroMacro(o.valor) });
+    }
+  }
+  c.registros_lidos = l.json.length;
+  if (n === 0) {
+    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma observação válida em ' + l.json.length + ' itens lidos';
+    return { consulta: c, dado: null };
+  }
+  c.itens = typeof op.itens === 'function' ? op.itens(validas) : [{ chave: serie, valor: { ultimo_mes: ultimo, n } }];
+  return { consulta: c, dado: l.json };
+}
+
+// Focus: uma consulta por INDICADOR chamado. Resumo = {coletado_em, n_anos} da coleta mais recente.
+export function consultaFocus(resp, indicador, opcoes) {
+  const l = lerRespostaHttp(resp, (opcoes || {}).campo);
+  const c = { fonte: 'bcb_focus', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  const linhas = l.json && Array.isArray(l.json.value) ? l.json.value : null;
+  if (linhas === null) {
+    c.erro = 'HTTP ' + l.http_status + ' com JSON sem a lista value do Olinda';
+    return { consulta: c, dado: null };
+  }
+  let recente = '';
+  for (const x of linhas) { if (x && x.Data > recente) recente = x.Data; }
+  const anos = {};
+  for (const x of linhas) {
+    if (x && x.Data === recente && Number.isInteger(Number(x.DataReferencia)) && numeroMacro(x.Mediana) !== null) anos[x.DataReferencia] = 1;
+  }
+  const nAnos = Object.keys(anos).length;
+  c.registros_lidos = linhas.length;
+  if (nAnos === 0) {
+    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma expectativa válida em ' + linhas.length + ' linhas lidas';
+    return { consulta: c, dado: null };
+  }
+  c.itens = [{ chave: indicador, valor: { coletado_em: recente, n_anos: nAnos } }];
+  return { consulta: c, dado: l.json };
+}
+
+// SIDRA: uma consulta (IPCA). A primeira linha é o cabeçalho descritivo, não dado.
+export function consultaSidra(resp, opcoes) {
+  const l = lerRespostaHttp(resp, (opcoes || {}).campo);
+  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  if (!Array.isArray(l.json)) {
+    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';
+    return { consulta: c, dado: null };
+  }
+  let n = 0, ultimo = '';
+  for (const o of l.json.slice(1)) {
+    const m = String((o && o.D3C) || '').match(/^(\d{4})(\d{2})$/);
+    if (m && numeroMacro(o.V) !== null) { n++; const ym = m[1] + '-' + m[2]; if (ym > ultimo) ultimo = ym; }
+  }
+  c.registros_lidos = l.json.length;
+  if (n === 0) {
+    c.erro = 'HTTP ' + l.http_status + ' sem nenhum mês válido em ' + l.json.length + ' linhas lidas';
+    return { consulta: c, dado: null };
+  }
+  c.itens = [{ chave: 'IPCA', valor: { ultimo_mes: ultimo, n } }];
+  return { consulta: c, dado: l.json };
+}
+
+// ---------------------------------------------------------------------------
+// A3 fatia 1 — BCB, taxa MÉDIA de juros por modalidade, PJ (SGS, % a.a., mensal).
+// Fonte do catálogo: bcb_juros_modalidade. É a média PONDERADA do mercado (decisão do
+// dono, 25/11/2026), não a taxa banco a banco da Olinda. NÃO vai para indice_macro_obs: o
+// export lista toda série dali na aba Macro do cliente (portal export-modelagem.ts:236),
+// e série nova mudaria o arquivo (é a A5). Vai para fato_externo, 1 fato por série-mês.
+//
+// SUBCONJUNTO (19 de 24 códigos conferidos no CKAN do BCB em 25/11/2026): as 18
+// modalidades-FOLHA mais o total PJ (20715) como referência. Ficam de fora os totais que
+// são soma de folhas já incluídas: 20718 (livres), 20725 (capital de giro), 20730
+// (aquisição de bens), 20733 (arrendamento), 20757 (direcionados). Eles dobrariam linhas
+// que o analista recompõe, e o total PJ já dá o nível geral. Se a Fase C quiser um total
+// de grupo, a conta fica na leitura, não numa linha a mais por dia.
+// ---------------------------------------------------------------------------
+export const JUROS_PJ_SGS = [
+  { sgs: 20715, nome: 'PJ total (livres + direcionados)' },
+  { sgs: 20719, nome: 'Desconto de duplicatas e recebíveis' },
+  { sgs: 20720, nome: 'Desconto de cheques' },
+  { sgs: 20721, nome: 'Antecipação de faturas de cartão de crédito' },
+  { sgs: 20722, nome: 'Capital de giro até 365 dias' },
+  { sgs: 20723, nome: 'Capital de giro acima de 365 dias' },
+  { sgs: 20724, nome: 'Capital de giro rotativo' },
+  { sgs: 20726, nome: 'Conta garantida' },
+  { sgs: 20727, nome: 'Cheque especial' },
+  { sgs: 20728, nome: 'Aquisição de veículos' },
+  { sgs: 20729, nome: 'Aquisição de outros bens' },
+  { sgs: 20731, nome: 'Arrendamento mercantil de veículos' },
+  { sgs: 20732, nome: 'Arrendamento mercantil de outros bens' },
+  { sgs: 20734, nome: 'Vendor' },
+  { sgs: 20735, nome: 'Compror' },
+  { sgs: 20736, nome: 'Adiantamento sobre contratos de câmbio (ACC)' },
+  { sgs: 20737, nome: 'Financiamento a importações' },
+  { sgs: 20738, nome: 'Financiamento a exportações' },
+  { sgs: 20739, nome: 'Repasse externo' },
+];
+
+// JANELA por execução: os 2 últimos meses (o último publicado + a revisão do anterior).
+// TETO conhecido: fato_externo é imutável e cresce todo dia (a mesma janela é
+// registrada de novo a cada execução), com o banco em 112 MB de 500 MB no plano gratuito.
+// Medido pelo gerador: 19 consultas + 38 fatos = 57 linhas/dia. Subir a janela multiplica
+// as linhas (3 meses = 76 fatos/dia). O histórico só começa no dia em que o workflow
+// passou a rodar; carga de histórico longo é fatia futura, se a Fase C pedir.
+export const JANELA_JUROS_MESES = 2;
+
+// O endpoint ultimos/N não depende do relógio de quem gera (o gerador é determinístico).
+// O SGS recusa N alto (HTTP 400 acima de ~20, medido em 2026-07-29; ver urlSgs): 2 é seguro.
+export function urlSgsUltimos(codigoSgs, n = JANELA_JUROS_MESES) {
+  return `${SGS_BASE}.${codigoSgs}/dados/ultimos/${n}?formato=json`;
+}
+
+// Itens da consulta: um fato por mês lido. chave 'sgs:<código>'; valor com a data, a taxa
+// % a.a. e o nome da série; referencia = código.mês, que identifica o ponto sem a URL.
+export function itensJuros(sgs, nome) {
+  return function (validas) {
+    return validas.map(function (o) {
+      return {
+        chave: 'sgs:' + sgs,
+        valor: { data_ref: o.data_ref, taxa_aa: o.valor, serie: nome },
+        referencia: 'sgs.' + sgs + ':' + o.data_ref.slice(0, 7),
+      };
+    });
+  };
+}
+
+// ---------------------------------------------------------------------------
+// A3 fatia 2 — BCB/SGS (fonte bcb_sgs): atividade, crédito/inadimplência PJ e euro.
+// Destino fato_externo (NÃO indice_macro_obs: a aba Macro do cliente é a A5), mesma
+// janela e mesmo desenho da fatia 1 (uma consulta por série, na corrente linear).
+//
+// SÓ ENTRA SÉRIE COM NOME CONFIRMADO POR FONTE DO BCB (regra 1: nunca rotular por suposição):
+//  - 24363, 24364, 20540, 21083, 21086: título e conceito lidos no CKAN do BCB (dadosabertos).
+//  - 21619: o CKAN não a indexa. Confirmada pelo VALOR contra a API PTAX do próprio BCB
+//    (Olinda, CotacaoMoedaDia, EUR, boletim "Fechamento PTAX", cotacaoVenda): 24/11/2026
+//    = 6,4260 e 23/11/2026 = 6,5076 nas DUAS fontes, exatos. Quem lê o nome pelo valor deve
+//    saber disso: o rótulo vem da identidade de valor, não de um texto de catálogo.
+//    (21620, a compra, bate com cotacaoCompra: 6,4248 e 6,5057.)
+// FICA FORA: 192 (suposição: INCC % a.m.; responde 0,22 e 0,37 em set/out 2026, mas o CKAN
+// não a indexa, a página de metadados do SGS estava fora do ar em 25/11/2026 e nenhuma outra
+// fonte do BCB a traz: nome NÃO confirmado) e 7458 (parou em 2025).
+//
+// UNIDADE e NATUREZA vão em cada fato, para o leitor não adivinhar se compõe: nenhuma
+// destas séries compõe nem soma no tempo (compoe: false). 20540 tem unidade NULA de
+// propósito: o conceito do BCB diz "saldo em final de período" mas não a unidade, e
+// R$ milhões seria suposição. O fato diz isso em vez de afirmar uma unidade.
+// ---------------------------------------------------------------------------
+export const SGS_EXTRA = [
+  { sgs: 24363, nome: 'IBC-Br (Índice de Atividade Econômica do Banco Central)', natureza: 'indice', unidade: 'índice', periodicidade: 'mensal' },
+  { sgs: 24364, nome: 'IBC-Br com ajuste sazonal', natureza: 'indice', unidade: 'índice', periodicidade: 'mensal' },
+  { sgs: 20540, nome: 'Saldo da carteira de crédito, pessoas jurídicas, total', natureza: 'estoque', unidade: null, periodicidade: 'mensal' },
+  { sgs: 21083, nome: 'Inadimplência da carteira de crédito (atraso acima de 90 dias), pessoas jurídicas, total', natureza: 'proporcao', unidade: '% da carteira', periodicidade: 'mensal' },
+  { sgs: 21086, nome: 'Inadimplência da carteira de crédito com recursos livres (atraso acima de 90 dias), pessoas jurídicas, total', natureza: 'proporcao', unidade: '% da carteira', periodicidade: 'mensal' },
+  { sgs: 21619, nome: 'Euro, PTAX de fechamento, venda', natureza: 'cotacao', unidade: 'R$/EUR', periodicidade: 'diaria' },
+];
+
+// JANELA por observação, por periodicidade. Mensal: 2 (o último publicado + a revisão do
+// anterior), igual à fatia 1. Diária: 5 observações (~1 semana útil: cobre feriado e um dia
+// sem coleta). TETO: fato_externo é imutável e a janela é re-registrada todo dia; medido pelo
+// gerador, 5 mensais x 2 + 1 diária x 5 = 15 fatos + 6 consultas = 21 linhas/dia. Histórico
+// longo é fatia futura, se a Fase C pedir.
+export const JANELA_SGS_EXTRA = { mensal: JANELA_JUROS_MESES, diaria: 5 };
+
+// Itens: um fato por observação. data_ref é a data DA observação: dia 1 do mês nas mensais
+// (convenção do SGS) e o dia real na diária; periodicidade diz qual das duas é.
+export function itensSgsExtra(sgs, meta) {
+  return function (validas) {
+    return validas.map(function (o) {
+      return {
+        chave: 'sgs:' + sgs,
+        valor: {
+          data_ref: o.data_ref, valor: o.valor, unidade: meta.unidade, natureza: meta.natureza,
+          compoe: false, periodicidade: meta.periodicidade, serie: meta.nome,
+        },
+        referencia: 'sgs.' + sgs + ':' + (meta.periodicidade === 'diaria' ? o.data_ref : o.data_ref.slice(0, 7)),
+      };
+    });
+  };
+}

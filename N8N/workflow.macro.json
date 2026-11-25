@@ -6,15 +6,15 @@
         "rule": {
           "interval": [
             {
-              "field": "months",
-              "triggerAtDayOfMonth": 12,
+              "field": "days",
+              "daysInterval": 1,
               "triggerAtHour": 6
             }
           ]
         }
       },
-      "id": "agenda-mensal",
-      "name": "Agenda Mensal",
+      "id": "agenda-di-ria",
+      "name": "Agenda Diária",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -31,6 +31,186 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
+        2340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.__url }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "corpo_cru"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "bcb-sgs",
+      "name": "BCB SGS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r, campo) {\n  const j = r || {};\n  const nomeCorpo = campo || 'data';\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaSgs(resp, serie, opcoes) {\n  const op = opcoes || {};\n  const l = lerRespostaHttp(resp, op.campo);\n  const c = { fonte: op.fonte || 'bcb_sgs', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  if (!Array.isArray(l.json)) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista de observações do SGS';\n    return { consulta: c, dado: null };\n  }\n  let n = 0, ultimo = '';\n  const validas = [];\n  for (const o of l.json) {\n    const m = String((o && o.data) || '').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);\n    if (m && numeroMacro(o.valor) !== null) {\n      n++; const iso = m[3] + '-' + m[2]; if (iso > ultimo) ultimo = iso;\n      validas.push({ data_ref: m[3] + '-' + m[2] + '-' + m[1], valor: numeroMacro(o.valor) });\n    }\n  }\n  c.registros_lidos = l.json.length;\n  if (n === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma observação válida em ' + l.json.length + ' itens lidos';\n    return { consulta: c, dado: null };\n  }\n  c.itens = typeof op.itens === 'function' ? op.itens(validas) : [{ chave: serie, valor: { ultimo_mes: ultimo, n } }];\n  return { consulta: c, dado: l.json };\n}\nlet serie = null;\ntry { serie = $('Séries a Coletar').item.json.__serie; } catch (e) { serie = null; }\nconst c = consultaSgs($json, serie || 'SGS', { campo: \"corpo_cru\" });\nreturn { json: { __serie: serie, __fonte: 'BCB/SGS', __corpo: c.dado, __consulta: c.consulta } };"
+      },
+      "id": "ler-sgs",
+      "name": "Ler SGS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-sgs",
+      "name": "Registrar Consulta SGS",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3120,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Ler SGS').all().map((i) => ({ json: { __serie: i.json.__serie, __fonte: i.json.__fonte, __corpo: i.json.__corpo } }));"
+      },
+      "id": "manter-contexto-sgs",
+      "name": "Manter Contexto SGS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63/p/last%20132",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "corpo_cru"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "ibge-sidra-ipca-",
+      "name": "IBGE SIDRA (IPCA)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4680,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r, campo) {\n  const j = r || {};\n  const nomeCorpo = campo || 'data';\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaSidra(resp, opcoes) {\n  const l = lerRespostaHttp(resp, (opcoes || {}).campo);\n  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  if (!Array.isArray(l.json)) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';\n    return { consulta: c, dado: null };\n  }\n  let n = 0, ultimo = '';\n  for (const o of l.json.slice(1)) {\n    const m = String((o && o.D3C) || '').match(/^(\\d{4})(\\d{2})$/);\n    if (m && numeroMacro(o.V) !== null) { n++; const ym = m[1] + '-' + m[2]; if (ym > ultimo) ultimo = ym; }\n  }\n  c.registros_lidos = l.json.length;\n  if (n === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhum mês válido em ' + l.json.length + ' linhas lidas';\n    return { consulta: c, dado: null };\n  }\n  c.itens = [{ chave: 'IPCA', valor: { ultimo_mes: ultimo, n } }];\n  return { consulta: c, dado: l.json };\n}\nconst c = consultaSidra(($input.all()[0] || {}).json, { campo: \"corpo_cru\" });\nreturn [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: c.dado, __consulta: c.consulta } }];"
+      },
+      "id": "ler-sidra",
+      "name": "Ler SIDRA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-sidra",
+      "name": "Registrar Consulta SIDRA",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5200,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Ler SIDRA').all().map((i) => ({ json: { __serie: i.json.__serie, __fonte: i.json.__fonte, __corpo: i.json.__corpo } }));"
+      },
+      "id": "marcar-fonte-ibge",
+      "name": "Marcar Fonte IBGE",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5720,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\"json\":{\"__sgs\":20715,\"__nome\":\"PJ total (livres + direcionados)\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20715/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20719,\"__nome\":\"Desconto de duplicatas e recebíveis\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20719/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20720,\"__nome\":\"Desconto de cheques\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20720/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20721,\"__nome\":\"Antecipação de faturas de cartão de crédito\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20721/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20722,\"__nome\":\"Capital de giro até 365 dias\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20722/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20723,\"__nome\":\"Capital de giro acima de 365 dias\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20723/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20724,\"__nome\":\"Capital de giro rotativo\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20724/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20726,\"__nome\":\"Conta garantida\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20726/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20727,\"__nome\":\"Cheque especial\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20727/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20728,\"__nome\":\"Aquisição de veículos\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20728/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20729,\"__nome\":\"Aquisição de outros bens\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20729/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20731,\"__nome\":\"Arrendamento mercantil de veículos\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20731/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20732,\"__nome\":\"Arrendamento mercantil de outros bens\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20732/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20734,\"__nome\":\"Vendor\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20734/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20735,\"__nome\":\"Compror\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20735/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20736,\"__nome\":\"Adiantamento sobre contratos de câmbio (ACC)\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20736/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20737,\"__nome\":\"Financiamento a importações\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20737/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20738,\"__nome\":\"Financiamento a exportações\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20738/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20739,\"__nome\":\"Repasse externo\",\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20739/dados/ultimos/2?formato=json\"}}];"
+      },
+      "id": "s-ries-juros",
+      "name": "Séries Juros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
         260,
         0
       ]
@@ -41,13 +221,17 @@
         "options": {
           "response": {
             "response": {
-              "neverError": true
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "corpo_cru"
             }
-          }
+          },
+          "timeout": 60000
         }
       },
-      "id": "bcb-sgs",
-      "name": "BCB SGS",
+      "id": "bcb-juros",
+      "name": "BCB Juros",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -62,10 +246,10 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "return { json: { __serie: $('Séries a Coletar').item.json.__serie, __fonte: 'BCB/SGS', __corpo: $json } };"
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r, campo) {\n  const j = r || {};\n  const nomeCorpo = campo || 'data';\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaSgs(resp, serie, opcoes) {\n  const op = opcoes || {};\n  const l = lerRespostaHttp(resp, op.campo);\n  const c = { fonte: op.fonte || 'bcb_sgs', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  if (!Array.isArray(l.json)) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista de observações do SGS';\n    return { consulta: c, dado: null };\n  }\n  let n = 0, ultimo = '';\n  const validas = [];\n  for (const o of l.json) {\n    const m = String((o && o.data) || '').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);\n    if (m && numeroMacro(o.valor) !== null) {\n      n++; const iso = m[3] + '-' + m[2]; if (iso > ultimo) ultimo = iso;\n      validas.push({ data_ref: m[3] + '-' + m[2] + '-' + m[1], valor: numeroMacro(o.valor) });\n    }\n  }\n  c.registros_lidos = l.json.length;\n  if (n === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma observação válida em ' + l.json.length + ' itens lidos';\n    return { consulta: c, dado: null };\n  }\n  c.itens = typeof op.itens === 'function' ? op.itens(validas) : [{ chave: serie, valor: { ultimo_mes: ultimo, n } }];\n  return { consulta: c, dado: l.json };\n}\nfunction itensJuros(sgs, nome) {\n  return function (validas) {\n    return validas.map(function (o) {\n      return {\n        chave: 'sgs:' + sgs,\n        valor: { data_ref: o.data_ref, taxa_aa: o.valor, serie: nome },\n        referencia: 'sgs.' + sgs + ':' + o.data_ref.slice(0, 7),\n      };\n    });\n  };\n}\nlet ctx = {};\ntry { ctx = $('Séries Juros').item.json; } catch (e) { ctx = {}; }\nconst c = consultaSgs($json, 'sgs:' + ctx.__sgs, { campo: \"corpo_cru\", fonte: 'bcb_juros_modalidade', itens: itensJuros(ctx.__sgs, ctx.__nome) });\nif (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';\nreturn { json: { __consulta: c.consulta } };"
       },
-      "id": "manter-contexto-sgs",
-      "name": "Manter Contexto SGS",
+      "id": "ler-juros",
+      "name": "Ler Juros",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -75,22 +259,94 @@
     },
     {
       "parameters": {
-        "url": "https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63/p/last%20132",
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-juros",
+      "name": "Registrar Consulta Juros",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1040,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {} }];"
+      },
+      "id": "chamar-sidra",
+      "name": "Chamar SIDRA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {} }];"
+      },
+      "id": "retomar-dados",
+      "name": "Retomar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\"json\":{\"__sgs\":24363,\"__meta\":{\"nome\":\"IBC-Br (Índice de Atividade Econômica do Banco Central)\",\"natureza\":\"indice\",\"unidade\":\"índice\",\"periodicidade\":\"mensal\"},\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.24363/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":24364,\"__meta\":{\"nome\":\"IBC-Br com ajuste sazonal\",\"natureza\":\"indice\",\"unidade\":\"índice\",\"periodicidade\":\"mensal\"},\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.24364/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":20540,\"__meta\":{\"nome\":\"Saldo da carteira de crédito, pessoas jurídicas, total\",\"natureza\":\"estoque\",\"unidade\":null,\"periodicidade\":\"mensal\"},\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.20540/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":21083,\"__meta\":{\"nome\":\"Inadimplência da carteira de crédito (atraso acima de 90 dias), pessoas jurídicas, total\",\"natureza\":\"proporcao\",\"unidade\":\"% da carteira\",\"periodicidade\":\"mensal\"},\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.21083/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":21086,\"__meta\":{\"nome\":\"Inadimplência da carteira de crédito com recursos livres (atraso acima de 90 dias), pessoas jurídicas, total\",\"natureza\":\"proporcao\",\"unidade\":\"% da carteira\",\"periodicidade\":\"mensal\"},\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.21086/dados/ultimos/2?formato=json\"}},{\"json\":{\"__sgs\":21619,\"__meta\":{\"nome\":\"Euro, PTAX de fechamento, venda\",\"natureza\":\"cotacao\",\"unidade\":\"R$/EUR\",\"periodicidade\":\"diaria\"},\"__url\":\"https://api.bcb.gov.br/dados/serie/bcdata.sgs.21619/dados/ultimos/5?formato=json\"}}];"
+      },
+      "id": "s-ries-sgs-extra",
+      "name": "Séries SGS Extra",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.__url }}",
         "options": {
           "response": {
             "response": {
-              "neverError": true
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "corpo_cru"
             }
-          }
+          },
+          "timeout": 60000
         }
       },
-      "id": "ibge-sidra-ipca-",
-      "name": "IBGE SIDRA (IPCA)",
+      "id": "bcb-sgs-extra",
+      "name": "BCB SGS Extra",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        260,
-        180
+        1560,
+        0
       ],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
@@ -99,16 +355,46 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: $input.all().map(i => i.json) } }];"
+        "mode": "runOnceForEachItem",
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r, campo) {\n  const j = r || {};\n  const nomeCorpo = campo || 'data';\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaSgs(resp, serie, opcoes) {\n  const op = opcoes || {};\n  const l = lerRespostaHttp(resp, op.campo);\n  const c = { fonte: op.fonte || 'bcb_sgs', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  if (!Array.isArray(l.json)) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista de observações do SGS';\n    return { consulta: c, dado: null };\n  }\n  let n = 0, ultimo = '';\n  const validas = [];\n  for (const o of l.json) {\n    const m = String((o && o.data) || '').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);\n    if (m && numeroMacro(o.valor) !== null) {\n      n++; const iso = m[3] + '-' + m[2]; if (iso > ultimo) ultimo = iso;\n      validas.push({ data_ref: m[3] + '-' + m[2] + '-' + m[1], valor: numeroMacro(o.valor) });\n    }\n  }\n  c.registros_lidos = l.json.length;\n  if (n === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma observação válida em ' + l.json.length + ' itens lidos';\n    return { consulta: c, dado: null };\n  }\n  c.itens = typeof op.itens === 'function' ? op.itens(validas) : [{ chave: serie, valor: { ultimo_mes: ultimo, n } }];\n  return { consulta: c, dado: l.json };\n}\nfunction itensSgsExtra(sgs, meta) {\n  return function (validas) {\n    return validas.map(function (o) {\n      return {\n        chave: 'sgs:' + sgs,\n        valor: {\n          data_ref: o.data_ref, valor: o.valor, unidade: meta.unidade, natureza: meta.natureza,\n          compoe: false, periodicidade: meta.periodicidade, serie: meta.nome,\n        },\n        referencia: 'sgs.' + sgs + ':' + (meta.periodicidade === 'diaria' ? o.data_ref : o.data_ref.slice(0, 7)),\n      };\n    });\n  };\n}\nlet ctx = {};\ntry { ctx = $('Séries SGS Extra').item.json; } catch (e) { ctx = {}; }\nconst c = consultaSgs($json, 'sgs:' + ctx.__sgs, { campo: \"corpo_cru\", itens: itensSgsExtra(ctx.__sgs, ctx.__meta || {}) });\nif (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';\nreturn { json: { __consulta: c.consulta } };"
       },
-      "id": "marcar-fonte-ibge",
-      "name": "Marcar Fonte IBGE",
+      "id": "ler-sgs-extra",
+      "name": "Ler SGS Extra",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        520,
-        180
+        1820,
+        0
       ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-sgs-extra",
+      "name": "Registrar Consulta SGS Extra",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2080,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -119,8 +405,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
-        180
+        5980,
+        0
       ]
     },
     {
@@ -136,8 +422,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1300,
-        180
+        6240,
+        0
       ],
       "credentials": {
         "postgres": {
@@ -160,8 +446,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1560,
-        180
+        6500,
+        0
       ],
       "credentials": {
         "postgres": {
@@ -183,8 +469,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        260,
-        360
+        3380,
+        0
       ]
     },
     {
@@ -193,9 +479,13 @@
         "options": {
           "response": {
             "response": {
-              "neverError": true
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "corpo_cru"
             }
-          }
+          },
+          "timeout": 60000
         }
       },
       "id": "bcb-focus",
@@ -203,8 +493,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        520,
-        360
+        3640,
+        0
       ],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
@@ -214,14 +504,56 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "return { json: { __serie: $('Indicadores Focus').item.json.__serie, __corpo: $json } };"
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r, campo) {\n  const j = r || {};\n  const nomeCorpo = campo || 'data';\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaFocus(resp, indicador, opcoes) {\n  const l = lerRespostaHttp(resp, (opcoes || {}).campo);\n  const c = { fonte: 'bcb_focus', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  const linhas = l.json && Array.isArray(l.json.value) ? l.json.value : null;\n  if (linhas === null) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON sem a lista value do Olinda';\n    return { consulta: c, dado: null };\n  }\n  let recente = '';\n  for (const x of linhas) { if (x && x.Data > recente) recente = x.Data; }\n  const anos = {};\n  for (const x of linhas) {\n    if (x && x.Data === recente && Number.isInteger(Number(x.DataReferencia)) && numeroMacro(x.Mediana) !== null) anos[x.DataReferencia] = 1;\n  }\n  const nAnos = Object.keys(anos).length;\n  c.registros_lidos = linhas.length;\n  if (nAnos === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma expectativa válida em ' + linhas.length + ' linhas lidas';\n    return { consulta: c, dado: null };\n  }\n  c.itens = [{ chave: indicador, valor: { coletado_em: recente, n_anos: nAnos } }];\n  return { consulta: c, dado: l.json };\n}\nlet serie = null;\ntry { serie = $('Indicadores Focus').item.json.__serie; } catch (e) { serie = null; }\nconst c = consultaFocus($json, serie || 'Focus', { campo: \"corpo_cru\" });\nreturn { json: { __serie: serie, __corpo: c.dado, __consulta: c.consulta } };"
+      },
+      "id": "ler-focus",
+      "name": "Ler Focus",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3900,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-focus",
+      "name": "Registrar Consulta Focus",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        4160,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Ler Focus').all().map((i) => ({ json: { __serie: i.json.__serie, __corpo: i.json.__corpo } }));"
       },
       "id": "manter-contexto-focus",
       "name": "Manter Contexto Focus",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        780,
+        5720,
         360
       ]
     },
@@ -234,7 +566,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
+        5980,
         360
       ]
     },
@@ -251,7 +583,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1300,
+        6240,
         360
       ],
       "credentials": {
@@ -267,21 +599,99 @@
     }
   ],
   "connections": {
-    "Agenda Mensal": {
+    "Agenda Diária": {
+      "main": [
+        [
+          {
+            "node": "Séries Juros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Séries Juros": {
+      "main": [
+        [
+          {
+            "node": "BCB Juros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BCB Juros": {
+      "main": [
+        [
+          {
+            "node": "Ler Juros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Juros": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta Juros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta Juros": {
+      "main": [
+        [
+          {
+            "node": "Séries SGS Extra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Séries SGS Extra": {
+      "main": [
+        [
+          {
+            "node": "BCB SGS Extra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BCB SGS Extra": {
+      "main": [
+        [
+          {
+            "node": "Ler SGS Extra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler SGS Extra": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta SGS Extra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta SGS Extra": {
       "main": [
         [
           {
             "node": "Séries a Coletar",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "IBGE SIDRA (IPCA)",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Indicadores Focus",
             "type": "main",
             "index": 0
           }
@@ -303,7 +713,138 @@
       "main": [
         [
           {
+            "node": "Ler SGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler SGS": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta SGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta SGS": {
+      "main": [
+        [
+          {
+            "node": "Indicadores Focus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Indicadores Focus": {
+      "main": [
+        [
+          {
+            "node": "BCB Focus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BCB Focus": {
+      "main": [
+        [
+          {
+            "node": "Ler Focus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Focus": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta Focus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta Focus": {
+      "main": [
+        [
+          {
+            "node": "Chamar SIDRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamar SIDRA": {
+      "main": [
+        [
+          {
+            "node": "IBGE SIDRA (IPCA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IBGE SIDRA (IPCA)": {
+      "main": [
+        [
+          {
+            "node": "Ler SIDRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler SIDRA": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta SIDRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta SIDRA": {
+      "main": [
+        [
+          {
+            "node": "Retomar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retomar Dados": {
+      "main": [
+        [
+          {
             "node": "Manter Contexto SGS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Marcar Fonte IBGE",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Manter Contexto Focus",
             "type": "main",
             "index": 0
           }
@@ -315,17 +856,6 @@
         [
           {
             "node": "Normalizar Observações",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IBGE SIDRA (IPCA)": {
-      "main": [
-        [
-          {
-            "node": "Marcar Fonte IBGE",
             "type": "main",
             "index": 0
           }
@@ -365,28 +895,6 @@
         ]
       ]
     },
-    "Indicadores Focus": {
-      "main": [
-        [
-          {
-            "node": "BCB Focus",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "BCB Focus": {
-      "main": [
-        [
-          {
-            "node": "Manter Contexto Focus",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Manter Contexto Focus": {
       "main": [
         [
@@ -414,6 +922,6 @@
     "executionOrder": "v1"
   },
   "meta": {
-    "note": "Gerado por N8N/build-workflow-macro.mjs. Coleta mensal de IPCA/IGP-M/INPC/Selic/CDI/câmbio (BCB/SGS), da expectativa Focus por ano e do IPCA no IBGE/SIDRA para conferência cruzada. A ingestão é idempotente por (serie, fonte, data_ref): rebaixar a janela toda vez é intencional — é assim que uma revisão de série feita pela fonte chega até nós."
+    "note": "Gerado por N8N/build-workflow-macro.mjs. Coleta diária de IPCA/IGP-M/INPC/Selic/CDI/câmbio (BCB/SGS), da expectativa Focus por ano e do IPCA no IBGE/SIDRA para conferência cruzada. A ingestão é idempotente por (serie, fonte, data_ref): rebaixar a janela toda vez é intencional — é assim que uma revisão de série feita pela fonte chega até nós."
   }
 }

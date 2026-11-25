@@ -1,11 +1,79 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 139 (25/11/2026) — A3: o macro vira diário no repositório, com a consulta registrada por fonte; produção ainda NÃO republicada
+
+> **Migration mais nova: `0304_a_fonte_que_dizia_mensal_e_rodava_todo_dia.sql` — ESCRITA NESTA SESSÃO, NÃO APLICADA por esta rodada.** Se foi aplicada depois, quem responde é a sonda (`fn_instalacao_conferir() where migration = '0304'`); não foi lida nesta rodada: NÃO CONFERIDO.
+> **Migration anterior: `0303`, APLICADA EM PRODUÇÃO em 24/11/2026** (ver sessão 138).
+> **Nenhuma migration nova além da 0304.** Mudanças: `N8N/` (macro), `Supabase/migrations/0304`, testes, documentação. Portal não tocado.
+> **Branch:** `claude/brave-ptolemy-3yux4w`, commits `5e5c1d4`, `f102a92`, `b87dd18` (fatias A3 0–2), `da1b259` (0304), `0fc6cde` e `8d7eb3e` (revisão). Ainda sem PR nesta rodada.
+
+### ▶ PRÓXIMA SESSÃO — COMECE AQUI: confirmar a republicação e seguir a A3 (fonte 4)
+
+- **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado), continuação. Leia ESTADO.md sessão 139 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: perguntar ao dono se a 0304 foi aplicada e o macro republicado, e se a 1ª execução diária gravou corpo_cru e "encontrado" (critério na seção abaixo). Só então a fonte 4 (IBGE/SIDRA setorial), com a mesma forma: uma consulta por série, registrada pela fn_registrar_consulta_externa; "falhou" nunca vira "nada encontrado". Antes da CVM (fonte 5), medir o tamanho do banco (112 MB de 500 MB em 25/11).`
+- **Não começar a fonte 4 antes da 1ª execução em produção.** Sem ela, a A3 inteira continua sem medida em produção, e a fonte 4 nasce sobre o mesmo chão não medido.
+- Fontes 4 a 9 da tabela da A3: não feitas (ver `FASE_A_FONTES_PUBLICAS.md` §5).
+- Ponto de entrada no código: `N8N/lib/macro.mjs` (consultas, `lerRespostaHttp`), `N8N/build-workflow-macro.mjs` (gerador, 30 nós), `fonte_externa` (catálogo; 0304 corrige as três fontes do macro).
+
+### O que esta sessão fez
+
+- **Medido em produção (SQL, 25/11; notebook "A3 — conferência do macro em produção"):** o macro rodava **mensal** (dia 12, 09:00 UTC), com execuções em 12/10 e 12/11. Último mês gravado: SELIC/CDI 2026-11; CAMBIO_USD/IGPM 2026-10; IPCA/INPC 2026-09 (última coleta em 12/10). O IPCA de outubro (0,14) já estava no SGS em 25/11, mas ainda não estava no banco. Focus: último boletim em 06/11, 5 séries × 25. PIB só como expectativa. Banco: 112 MB de 500 MB (public 93 MB).
+- **Fonte 1 da A3 (conferir o macro em produção): feita.** Resposta: roda, mas mensal, e não diária como o plano dizia.
+- **Repositório, fatias 0 a 2 da A3:**
+  - macro diário às 06h, com uma linha em `consulta_externa` por consulta (`b87dd18`);
+  - juros PJ por modalidade pelo SGS, 19 séries, em `fato_externo` (`f102a92`);
+  - IBC-Br (24363, 24364), crédito e inadimplência PJ (20540, 21083, 21086) e euro PTAX venda (21619) (`5e5c1d4`).
+- **0304 (`da1b259`):** o catálogo dizia mensal e rodava todo dia. Juros por modalidade ficam conectados via SGS, mensais, com prazo de 30 dias. bcb_sgs e bcb_focus recebem só a observação.
+- **Correção do corpo HTTP (`0fc6cde`):** o nó HTTP com `responseFormat: text` + `fullResponse` entrega o corpo em `outputPropertyName` (default `data`), não em `body`. O gerador fixa `corpo_cru` e o passa aos cinco nós Ler. Ver a ficha `.claude/conhecimento/fichas/n8n-http-corpo-no-campo-da-opcao.md`.
+- **Decisões do dono (25/11):** (1) juros PJ = média ponderada do mercado pelo SGS; a taxa banco a banco da Olinda fica para depois. (2) Agenda diária para tudo. (3) Escopo do PR: macro + fontes 2 e 3.
+- **Achado de desenho:** as séries novas NÃO vão para `indice_macro_obs`, porque o export lista toda série dali na aba Macro (`portal/src/lib/export-modelagem.ts:236`). Vão para `fato_externo`. Levar à aba é a A5.
+- **Séries deixadas de fora:** 192 (suposta INCC, nome não confirmado: o CKAN não a indexa e os metadados do SGS estavam fora do ar) e 7458 (parou em 2025). A 20540 entra com unidade NULA de propósito: o conceito do BCB não diz a unidade.
+
+### Medido × suposto
+
+| Afirmação | Situação |
+|---|---|
+| Macro roda mensal em produção; execuções 12/10 e 12/11; últimos meses gravados | **MEDIDO** em produção (25/11) |
+| Banco com 112 MB de 500 MB | **MEDIDO** (25/11) |
+| Macro e workflow novos (30 nós, gatilho diário) funcionam em produção | **NÃO CONFERIDO**: falta a republicação e a 1ª execução |
+| Senha nova do banco no n8n | **NÃO CONFERIDO**: a próxima execução responde |
+| 0304 aplicada no banco | **NÃO CONFERIDO** nesta rodada (o dono faz o passo 1) |
+| Suíte N8N: 761 testes, 756 passam, 5 falham | **MEDIDO** nesta rodada. As 5 falhas são de livros de teste não gerados no container. Causa verificada só no `workflow-sim` (ENOENT de `TEXTO_EXTRAIDO.json` do book-vertentes); as outras quatro, pela mesma linha de base |
+| Testes do macro (`macro.test` + `workflow-macro-sim`): 47 de 47 | **MEDIDO** nesta rodada |
+| Suíte Supabase `*.test.mjs`: 52 testes, 48 passam e **4 são PULADOS** | **MEDIDO** nesta rodada. Os 4 pulados precisam de `TESTE_PSQL` (banco). O "48/48" registrado antes não mostra isso: nesta rodada, 48 executaram e 4 pularam, e o executor do conferidor NÃO foi posto à prova |
+| `Supabase/test/run.sh` com a 0304: 9 asserts novos, 4 de 9 reprovam com a correção desligada | **Medido na sessão** (e relatado pelo dono da rodada). NÃO remedido nesta rodada, porque exige o Postgres do container |
+| Crescimento de ~10 MB/ano com o macro | **ESTIMADO**, não medido. A fixture HTTP é derivada do código do n8n, não de captura real |
+
+### Revisão
+
+- Ciclo 1: 1 CRÍTICO (corpo lido de `body`, não de `data`), 1 ALTO (fixture inventada + asserts de mecanismo), 1 BAIXO (ESTADO da sessão 131). Corrigidos em `0fc6cde` e `8d7eb3e`.
+- Ciclo 2: sem achado.
+
+### Achados deixados (MÉDIO/BAIXO)
+
+- `Normalizar Observações` lança com zero observação e pode impedir o `Normalizar Focus` de gravar expectativas no mesmo dia. Já era assim antes desta sessão.
+- `N8N/gerar-seed-macro.mjs` (linhas 5 a 7 e 98) ainda diz "dia 12". Deixado: o comentário é copiado para o seed gerado, e corrigir pede regerar o seed e rodar `seed_macro.test.sql`.
+- `Supabase/README.md` (linhas 116 e 197) dizia "mensal, dia 12": corrigido nesta rodada, por ser só texto.
+- Teto conhecido: nada acusa série SGS parada (data_ref velha). O histórico de `fato_externo` começa no dia da republicação (janela de 2 meses para as mensais, 5 observações para a diária).
+- Supabase `*.test.mjs`: 4 testes pulados por falta de `TESTE_PSQL`. Rodar com o banco declarado antes de dizer "verde".
+
+### O dono faz à mão, NA ORDEM
+
+1. **Aplicar a 0304** e conferir: `select chave, presente from fn_instalacao_conferir() where migration = '0304' and not presente` deve dar 0 linhas.
+2. **Republicar o workflow do macro:** `N8N_ARQUIVO_REPO=N8N/workflow.macro.json`, com `preparar-republicacao.mjs` e `conferir-publicado.mjs`. Esperado: 30 nós, gatilho "Agenda Diária" ativo, credencial Postgres de serviço nos 5 nós "Registrar Consulta*". Conferir o `multipleFiles`.
+3. **Depois da 1ª execução:**
+   - a saída de "BCB SGS" mostra `corpo_cru` ao lado de `statusCode`;
+   - `select fonte, resultado, count(*) from consulta_externa where data_consulta > now() - interval '1 day' group by 1,2` dá 12 `bcb_sgs`, 19 `bcb_juros_modalidade`, 5 `bcb_focus` e 1 `ibge_sidra`, todas `encontrado`;
+   - `indice_macro_obs` recebe o IPCA de outubro.
+
+A ordem 1 → 2 não é obrigatória (o workflow funciona sem a 0304), mas é a recomendada.
+
 ## SESSÃO 138 (24–25/11/2026) — Fase A: A1 (cópia de segurança) e A2 (base das fontes externas) FEITAS e em produção
 
-> **Migration mais nova: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql`, APLICADA EM PRODUÇÃO em 24/11/2026** (pela API de gerenciamento, 1,6 s, arquivo do commit `a4e813f`, md5 `a874a608…`). Antes: Postgres 17.6, cobertura 0302, 475 itens na sonda e 0 ausentes, `fonte_externa` inexistente, 81 casos / 2.999 pendências / 7.599 reconciliações. Depois: cobertura 0303, 511 itens e 0 ausentes, os 36 da 0303 presentes, 22 fontes (1 não oficial), 81 / 2.999 / 7.599 (nada tocado). PRs: #310 (A1+A2), #311 (cópia para repositório privado, senha com `@`), #312 (novas tentativas no Storage).
+> **Migration mais nova: `0304_a_fonte_que_dizia_mensal_e_rodava_todo_dia.sql` (Fase A, A3: o catálogo `fonte_externa` acompanha o macro diário; juros por modalidade conectada via SGS, mensal, 30 dias) — ESCRITA, NÃO APLICADA em produção; a sonda (`fn_instalacao_conferir() where migration = '0304'`) é quem responde.**
+> **Migration anterior: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql`, APLICADA EM PRODUÇÃO em 24/11/2026** (pela API de gerenciamento, 1,6 s, arquivo do commit `a4e813f`, md5 `a874a608…`). Antes: Postgres 17.6, cobertura 0302, 475 itens na sonda e 0 ausentes, `fonte_externa` inexistente, 81 casos / 2.999 pendências / 7.599 reconciliações. Depois: cobertura 0303, 511 itens e 0 ausentes, os 36 da 0303 presentes, 22 fontes (1 não oficial), 81 / 2.999 / 7.599 (nada tocado). PRs: #310 (A1+A2), #311 (cópia para repositório privado, senha com `@`), #312 (novas tentativas no Storage).
 
-### ▶ PRÓXIMA SESSÃO — COMECE AQUI: Fase A, fatia A3 (dados de mercado, n8n)
+### PRÓXIMA SESSÃO da sessão 138 (superada pela sessão 139, acima)
 
 - **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado). Leia ESTADO.md sessão 138 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: conferir se o macro diário roda em produção (último dado gravado de cada série). Depois uma fonte por commit, na ordem da tabela da A3; antes da CVM, medir o tamanho do banco (plano gratuito, 500 MB). Toda fonte registra pela fn_registrar_consulta_externa (0303) e "falhou" nunca vira "nada encontrado".`
 - **Não depende do dono.** A A4 (dados da empresa, portal) depende de uma decisão antes de começar: quem registra as consultas — o analista pelo portal (hoje: `authenticated` tem EXECUTE e o registro grava `registrado_por`) ou só o servidor (exige a chave de serviço na Vercel).
@@ -118,7 +186,7 @@
 
 ## SESSÃO 131 (18/11/2026) — 0302 (`fato_financeiro`, P27) APLICADA EM PRODUÇÃO; repositório organizado (#302)
 
-> **Migration mais nova no repositório: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql` (Fase A, A2: a base comum das fontes externas) — ESCRITA, NÃO APLICADA em produção; a sonda (`fn_instalacao_conferir() where migration = '0303'`) é quem responde.** A anterior, `0302_a_linha_que_nao_tinha_identidade.sql`, foi APLICADA EM PRODUÇÃO em 18/11/2026. É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
+> **Na época, a migration mais recente no repositório era `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql` (Fase A, A2: a base comum das fontes externas), então escrita e ainda não aplicada — APLICADA EM PRODUÇÃO em 24/11/2026 (ver sessão 138).** A anterior, `0302_a_linha_que_nao_tinha_identidade.sql`, foi APLICADA EM PRODUÇÃO em 18/11/2026. É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
 
 - **0302 APLICADA EM PRODUÇÃO em 18/11/2026** (pedido do dono). Pelo MCP do Supabase, em dois notebooks: "0302 — aplicar" (célula 1: o `alter type ... add value`, sozinho; célula 2: o resto do arquivo do commit `1e68bcb` sem `begin`/`commit` e sem os comentários de nível de topo) e "0302 — conferir depois". A cópia de transporte foi conferida antes no banco de teste: reaplicada, a assinatura md5 dos objetos não muda (`09fc3a17…`) e a sonda dá 20 de 20.
   - Antes: Postgres 17; cobertura 0301; 455 itens na sonda, 1 ausente (`envio_segredo_no_vault`, o de sempre); 81 mandatos; 2.999 pendências; 138.931 linhas em `campo_extraido`, 0 com `ln`; `fato_financeiro` inexistente; rótulo `conta_canonica_incerta` inexistente.

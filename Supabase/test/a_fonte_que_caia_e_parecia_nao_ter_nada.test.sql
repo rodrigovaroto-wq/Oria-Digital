@@ -220,10 +220,11 @@ begin
   raise notice '--- 1b. toda fonte tem prazo (decisão 8): o banco recusa fonte sem prazo e prazo que não bate com a origem ---';
   select count(*) into v_n from fonte_externa where validade_dias is null or validade_dias <= 0 or validade_origem is null;
   perform teste_assert_0303(v_n = 0, 'as 22 fontes do seed têm prazo e origem do prazo', v_n::text);
+  -- bcb_juros_modalidade sai do mínimo na 0304 (conectada via SGS, mensal, 30 dias; coberta por a_fonte_que_dizia_mensal_e_rodava_todo_dia.test.sql): as 21 restantes seguem as do seed da 0303
   select count(*) filter (where validade_origem = 'minimo_por_desconhecida' and validade_dias = 1 and cadencia is null),
          count(*) filter (where validade_origem = 'cadencia')
-    into v_n, v_n2 from fonte_externa;
-  perform teste_assert_0303(v_n = 22 and v_n2 = 0, 'o seed: as 22 no mínimo de 1 dia (cadência de publicação desconhecida) e nenhuma por cadência (o MTE incluído, decisão do dono)', v_n || '/' || v_n2);
+    into v_n, v_n2 from fonte_externa where chave <> 'bcb_juros_modalidade';
+  perform teste_assert_0303(v_n = 21 and v_n2 = 0, 'o seed: as 21 fontes além dos juros no mínimo de 1 dia (cadência de publicação desconhecida) e nenhuma por cadência (o MTE incluído, decisão do dono)', v_n || '/' || v_n2);
   perform teste_assert_0303((select validade_dias = 1 and cadencia is null and validade_origem = 'minimo_por_desconhecida' from fonte_externa where chave = 'mte_trabalho_escravo'),
     'o MTE (o plano diz a periodicidade da lista, não a data de publicação) vence em 1 dia, cadência nula: nunca parece nova estando velha (decisão do dono)');
   perform teste_assert_0303((select cadencia is null and validade_dias = 1 from fonte_externa where chave = 'bcb_sgs')
