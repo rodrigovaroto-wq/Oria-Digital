@@ -575,6 +575,14 @@ test('ordem: todo nó capaz de lançar só roda DEPOIS de todos os Registrar Con
     }
     return false;
   };
+  // ALCANÇÁVEL, antes de tudo. Sem isto o teste passa VAZIO quando uma aresta some: o nó que lança
+  // fica inalcançável, "existe caminho sem R?" responde não, e o macro para de gravar sem vermelho.
+  // Medido na revisão de cdbb0f3: apagar 'Registrar Consulta SIDRA Setorial' -> 'Séries a Coletar'
+  // (indice_macro_obs órfão) ou 'Registrar Consulta SGS Extra' -> 'Séries SIDRA Setorial' passava
+  // com a suíte inteira verde. Todo registro e todo nó que lança têm de rodar a partir do gatilho.
+  const alcancaveis = new Set(); const fila = [gatilho];
+  while (fila.length) { const n = fila.pop(); if (alcancaveis.has(n)) continue; alcancaveis.add(n); filhos(n).forEach((f) => fila.push(f)); }
+  for (const n of [...registrar, ...lanca]) assert.ok(alcancaveis.has(n), `"${n}" não é alcançável a partir do gatilho: nunca roda`);
   for (const t of lanca) {
     for (const r of registrar) {
       assert.ok(!alcancaSem(t, r), `"${t}" pode rodar sem que "${r}" tenha registrado antes`);
