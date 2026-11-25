@@ -1,0 +1,40 @@
+---
+id: n8n-http-corpo-no-campo-da-opcao
+tipo: defeito
+toca:
+  - N8N/lib/macro.mjs
+  - N8N/build-workflow-macro.mjs
+  - N8N/test/workflow-macro-sim.test.mjs
+prova: N8N/test/*.test.mjs
+ancora: N8N/lib/macro.mjs#lerRespostaHttp
+ancora_sha: 58e4efa01d7e
+substitui: []
+---
+
+# O corpo da resposta HTTP do n8n vai para o campo que a opção nomeia, não para "body"
+
+Termos de busca: HTTP Request, responseFormat, fullResponse, outputPropertyName, corpo, body, data,
+corpo_cru, lerRespostaHttp, macro, SGS, Focus, falhou, encontrado, teste sem captura real.
+
+## O que surpreende quem chega aqui
+
+- Com `responseFormat: 'text'` + `fullResponse: true`, o nó HTTP do n8n NÃO põe o corpo em `body`.
+  Ele põe em `outputPropertyName`, cujo padrão é `data` (`HttpRequestV3.node.ts`, ramo text).
+  Quem lê `body` recebe `null` em toda chamada.
+- O gerador fixa o campo EXPLÍCITO (`corpo_cru`, em `build-workflow-macro.mjs`) e o passa aos cinco
+  nós Ler. Um lado sem o outro falha na hora, que é o que se quer: o leitor errado não passa calado.
+- Um teste com fixture inventada (`{statusCode, body}`) passa com o defeito ligado. Medido em
+  25/11/2026: com o leitor antigo e a fixture derivada do código do n8n, 11 de 34 testes do arquivo
+  reprovam (30 de 447 asserts). A fixture não é captura real: não há resposta real no repositório.
+
+## Por que importa em produção
+
+Sem o campo certo, cada consulta vira `falhou` com motivo falso, os nós Ler entregam `__corpo` nulo,
+o Normalizar lança "zero observação" e `indice_macro_obs` e `expectativa` param de receber dado sem
+aviso. A aba Macro do Excel congelaria.
+
+## Como saber que a correção está viva
+
+Na 1ª execução depois da republicação, a saída de "BCB SGS" mostra `corpo_cru` ao lado de
+`statusCode`, e `consulta_externa` do dia tem `encontrado` nas fontes que responderam. Isso é
+medição em produção: o teste só prova o contrato do código, não a versão publicada.

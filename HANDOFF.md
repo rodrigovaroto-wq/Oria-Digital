@@ -4,7 +4,13 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 138 — COMECE AQUI (24–25/11/2026)
+## ▶ SESSÃO 139 — COMECE AQUI (25/11/2026)
+
+- **Leia a seção "SESSÃO 139" no topo do `ESTADO.md`** (`sed -n '1,60p' ESTADO.md`): ela traz o bloco "▶ PRÓXIMA SESSÃO" e o pedido pronto para colar.
+- **Migration mais nova: 0304, ESCRITA na sessão 139 e NÃO APLICADA nesta rodada** (o estado no banco é NÃO CONFERIDO; o dono faz o passo 1). A 0303 segue APLICADA desde 24/11.
+- **PR desta rodada:** ainda não aberto. Branch `claude/brave-ptolemy-3yux4w`. O texto da descrição está na resposta da sessão 139.
+
+## SESSÃO 138 (24–25/11/2026; histórico, a mais nova está acima)
 
 - **Leia a seção "SESSÃO 138" no topo do `ESTADO.md`** (`sed -n '1,40p' ESTADO.md`): ela traz o bloco "▶ PRÓXIMA SESSÃO" com o pedido pronto para a fatia A3.
 - **Migration mais nova: 0303, APLICADA em produção** (sonda: 36 de 36). A cópia de segurança diária roda no repositório privado `OriaDigital-backup` e foi medida (restaura do zero, contagens iguais).

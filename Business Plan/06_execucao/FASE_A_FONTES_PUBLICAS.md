@@ -2,7 +2,7 @@
 
 **Detalhe da primeira fase da prioridade definida pelo dono em 24/11/2026.** O plano único continua
 sendo o [`PLANO_DE_EXECUCAO.md`](PLANO_DE_EXECUCAO.md) (K1): ele diz a ordem; este arquivo diz o
-passo a passo da Fase A. **A1 e A2 estão feitas e em produção** (25/11/2026; medidas no Andamento do plano único e no `ESTADO.md`, sessão 138). As fatias A3 a A5 não estão construídas; a próxima é a A3.
+passo a passo da Fase A. **A1 e A2 estão feitas e em produção** (25/11/2026; medidas no Andamento do plano único e no `ESTADO.md`, sessão 138). A3 em andamento: fontes 1 a 3 no repositório (sessão 139); republicação e 1ª execução em produção NÃO CONFERIDAS; fontes 4 a 9 não feitas. A4 e A5 não construídas.
 
 ## 1. A ordem que o dono definiu
 
@@ -106,6 +106,14 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
   guardar só os campos usados. Se não couber, a decisão volta ao dono.
 - **Pronto quando:** cada fonte aparece no catálogo com a data da última atualização; derrubar uma
   fonte aparece como "falhou", nunca como "sem dado".
+
+**Estado (25/11/2026, sessão 139):**
+
+- Fonte 1 (macro em produção): **medida.** O macro rodava mensal (dia 12); execuções em 12/10 e 12/11; último mês gravado: SELIC/CDI 2026-11, CÂMBIO_USD/IGPM 2026-10, IPCA/INPC 2026-09.
+- Fonte 2 (juros PJ por modalidade): **feita no repositório** (`f102a92`, 0304). 19 séries pelo SGS. A taxa banco a banco da Olinda fica para depois (decisão do dono).
+- Fonte 3 (SGS): **parcial** (`5e5c1d4`): IBC-Br, crédito e inadimplência PJ, euro PTAX. Ficaram de fora o INCC (nome não confirmado) e a série 7458 (parou em 2025).
+- Fontes 4 a 9: **não feitas.**
+- **Falta para a A3 fechar:** a republicação do macro e a 1ª execução em produção (NÃO CONFERIDAS). Sem isso, nenhuma fonte da A3 tem medida em produção.
 
 ### A4 · Dados da empresa (sob demanda, só CNPJ) — item 1.H2, parte da empresa
 
