@@ -290,7 +290,20 @@ test('coleta com dado válido não lança', () => {
 // corpo vazio têm de chegar com o status/erro reais, e a falha de UMA série não pode ser
 // escondida pelo sucesso das outras.
 const SGS_OK = JSON.stringify([{ data: '01/08/2026', valor: '0.10' }, { data: '01/09/2026', valor: '0.14' }]);
-const resp = (statusCode, body) => ({ statusCode, statusMessage: '', headers: {}, body });
+// FIXTURE com a forma que o n8n REALMENTE produz para a configuração do nó (regra 4: a
+// anterior inventava { statusCode, body } e por isso um leitor de "body" passava verde).
+// Fonte: HttpRequestV3.node.ts do n8n (cópia lida em 25/11/2026; o arquivo declara
+// versions 3 a 4.5, e o gerador usa typeVersion 4.2; produção: n8n 2.30.7 segundo o
+// N8N/README.md, versão do arquivo lido NÃO identificada), ramo `responseFormat === 'text'`
+// com `fullResponse`: para cada propriedade de ['body','headers','statusCode','statusMessage'],
+// `body` vai para returnItem[outputPropertyName] (texto) e as demais copiam-se com o próprio
+// nome; default de outputPropertyName = 'data'. Chamada sem resposta com continueOnFail
+// vira { error: <mensagem em texto> } (mesmo arquivo). NÃO é captura de execução real: não há
+// captura de HTTP Request neste repositório; o que se afirma é só o que o código-fonte prova.
+// O campo do corpo é LIDO DA OPÇÃO DO NÓ no JSON gerado, não escrito aqui: quem mudar o nó ou o
+// leitor sem o outro faz os testes reprovarem.
+const CAMPO_CORPO_NO = nodeDe('BCB SGS').parameters.options.response.response.outputPropertyName;
+const resp = (statusCode, body) => ({ headers: {}, statusCode, statusMessage: 'x', [CAMPO_CORPO_NO]: body });
 
 // O que o banco receberia de 'Ler SGS' para uma série, dada a resposta do nó HTTP.
 const consultaSgsDe = (serie, httpJson) => rodarCode('Ler SGS', {
@@ -432,9 +445,7 @@ test('A3: topologia - registro ANTES dos dados, em série, e sem poder derrubá-
     assert.equal(n.parameters.options.queryBatching, 'independently', `${reg}: uma consulta recusada não leva as outras`);
     assert.equal(n.credentials.postgres.id, 'REPLACE');
     const h = nodeDe(http).parameters.options.response.response;
-    assert.equal(h.fullResponse, true, `${http}: sem o status real a falha vira corpo anônimo`);
-    assert.equal(h.responseFormat, 'text', `${http}: o hash é do corpo cru`);
-    assert.equal(h.neverError, true);
+    assert.equal(h.outputPropertyName, CAMPO_CORPO_NO, `${http}: o campo do corpo tem de ser o mesmo em todos os HTTP`);
   }
   // a função recebe 10 parâmetros, o último com default; o nó passa os 9 primeiros (mercado: caso/cnpj nulos, custo 0)
   assert.match(nodeDe('Registrar Consulta SGS').parameters.query, /null, null, \(q\.p->>'http_status'\)::int/);
@@ -527,8 +538,7 @@ test('A3.1: topologia - juros só REGISTRA, não toca indice_macro_obs, e o regi
   assert.equal(reg.alwaysOutputData, true);
   assert.equal(reg.parameters.options.queryBatching, 'independently');
   const h = nodeDe('BCB Juros');
-  assert.equal(h.parameters.options.response.response.fullResponse, true);
-  assert.equal(h.parameters.options.response.response.responseFormat, 'text');
+  assert.equal(h.parameters.options.response.response.outputPropertyName, CAMPO_CORPO_NO);
   assert.equal(h.onError, 'continueRegularOutput');
 });
 
@@ -646,5 +656,34 @@ test('A3.2: o registro novo é um Registrar Consulta, em série e só de registr
   assert.equal(reg.alwaysOutputData, true);
   assert.equal(reg.parameters.options.queryBatching, 'independently');
   assert.ok(!/Ler SGS Extra|BCB SGS Extra/.test(nodeDe('Normalizar Observações').parameters.jsCode), 'não vai para indice_macro_obs');
-  assert.equal(nodeDe('BCB SGS Extra').parameters.options.response.response.responseFormat, 'text');
+  assert.equal(nodeDe('BCB SGS Extra').parameters.options.response.response.outputPropertyName, CAMPO_CORPO_NO);
+});
+
+
+// --- CONTRATO nó HTTP -> nó Ler: a forma que o n8n entrega para ESTA configuração é LIDA ---
+// Defeito (revisão, achado crítico): o leitor lia "body" e o n8n entrega o corpo em
+// outputPropertyName (default "data"). Em produção as 45 consultas virariam "falhou" com motivo
+// falso e o Normalizar lançaria "zero observação". Aqui, para CADA par HTTP -> Ler, o campo do
+// corpo é derivado da opção do nó HTTP no JSON gerado e a resposta boa tem de virar consulta
+// lida (sem erro, com itens e o corpo cru intacto).
+test('contrato HTTP -> Ler: a resposta boa, na forma do n8n para o nó gerado, é LIDA em todas as fontes', () => {
+  const sidra = JSON.stringify([{ D3C: 'h', V: 'v' }, { D3C: '202609', V: '0.14' }]);
+  const focus = JSON.stringify({ value: [{ Data: '2026-11-21', DataReferencia: '2026', Mediana: 4.5 }] });
+  const pares = [
+    ['BCB SGS', 'Ler SGS', { 'Séries a Coletar': { __serie: 'IPCA' } }, SGS_OK],
+    ['BCB Focus', 'Ler Focus', { 'Indicadores Focus': { __serie: 'IPCA' } }, focus],
+    ['IBGE SIDRA (IPCA)', 'Ler SIDRA', {}, sidra],
+    ['BCB Juros', 'Ler Juros', { 'Séries Juros': { __sgs: 20722, __nome: 'x' } }, JUROS_OK],
+    ['BCB SGS Extra', 'Ler SGS Extra', { 'Séries SGS Extra': { __sgs: 24363, __meta: { nome: 'x', natureza: 'indice', unidade: 'índice', periodicidade: 'mensal' } } }, JUROS_OK],
+  ];
+  for (const [http, ler, porNome, corpo] of pares) {
+    const campo = nodeDe(http).parameters.options.response.response.outputPropertyName;
+    assert.ok(typeof campo === 'string' && campo.length > 0, `${http}: o campo do corpo tem de ser EXPLÍCITO (o default do n8n é "data", e mudar o default quebraria a leitura)`);
+    const entrega = { headers: {}, statusCode: 200, statusMessage: 'OK', [campo]: corpo };
+    const saida = rodarCode(ler, { itens: [entrega], porNome })[0].json.__consulta;
+    assert.equal(saida.erro, null, `${ler}: a resposta boa foi lida como falha (${saida.erro})`);
+    assert.equal(saida.http_status, 200);
+    assert.ok(Array.isArray(saida.itens) && saida.itens.length > 0, `${ler}: sem itens`);
+    assert.equal(saida.corpo, corpo, `${ler}: o corpo cru tem de chegar intacto (é o que o banco hasheia)`);
+  }
 });

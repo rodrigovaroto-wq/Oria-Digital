@@ -287,9 +287,14 @@ export function mediaAnualGeometrica(retornosAnuais, janela) {
 // (fecharia ou interpolaria o template literal do gerador).
 //
 // Contrato com o nó HTTP: options.response.response = { fullResponse: true,
-// neverError: true, responseFormat: 'text' }. Isso entrega UM item por chamada
-// com { statusCode, body: texto cru } — sem o split do array em N itens e com o
-// corpo exato de que o hash é a prova de leitura. Chamada que nem respondeu
+// neverError: true, responseFormat: 'text', outputPropertyName: <campo> }. Isso entrega UM
+// item por chamada com { headers, statusCode, statusMessage, [campo]: texto cru } — sem o
+// split do array em N itens e com o corpo exato de que o hash é a prova de leitura.
+// ATENÇÃO (defeito achado na revisão): com responseFormat text + fullResponse, o n8n NÃO
+// entrega o corpo em "body": entrega em outputPropertyName, cujo default é "data"
+// (HttpRequestV3.node.ts, ramo responseFormat text). Por isso o campo é parâmetro desta
+// função e o gerador o fixa EXPLÍCITO no nó e o passa a cada nó Ler: um lado sem o outro
+// lê null e grava 'falhou' com motivo falso em toda consulta. Chamada que nem respondeu
 // (timeout, DNS) chega pelo onError continueRegularOutput como { error }.
 // ---------------------------------------------------------------------------
 
@@ -298,8 +303,9 @@ export function mediaAnualGeometrica(retornosAnuais, janela) {
 //   - 2xx vazio/não-JSON  -> http_status 2xx + erro (a função grava falhou)
 //   - fora de 2xx         -> http_status real, erro null (a função grava falhou "HTTP 500")
 // Um 2xx sem erro tem json parseado: é o único caso em que o chamador pode montar itens.
-export function lerRespostaHttp(r) {
+export function lerRespostaHttp(r, campo) {
   const j = r || {};
+  const nomeCorpo = campo || 'data';
   if (j.statusCode === undefined && j.error !== undefined) {
     const e = j.error;
     const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);
@@ -309,7 +315,7 @@ export function lerRespostaHttp(r) {
   if (!Number.isInteger(st)) {
     return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };
   }
-  const corpo = typeof j.body === 'string' ? j.body : null;
+  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;
   if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };
   if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };
   if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };
@@ -329,7 +335,7 @@ export function lerRespostaHttp(r) {
 // válidas [{ data_ref: 'AAAA-MM-01', valor }]. Sem opcoes o comportamento é o de antes.
 export function consultaSgs(resp, serie, opcoes) {
   const op = opcoes || {};
-  const l = lerRespostaHttp(resp);
+  const l = lerRespostaHttp(resp, op.campo);
   const c = { fonte: op.fonte || 'bcb_sgs', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
   if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
   if (!Array.isArray(l.json)) {
@@ -355,8 +361,8 @@ export function consultaSgs(resp, serie, opcoes) {
 }
 
 // Focus: uma consulta por INDICADOR chamado. Resumo = {coletado_em, n_anos} da coleta mais recente.
-export function consultaFocus(resp, indicador) {
-  const l = lerRespostaHttp(resp);
+export function consultaFocus(resp, indicador, opcoes) {
+  const l = lerRespostaHttp(resp, (opcoes || {}).campo);
   const c = { fonte: 'bcb_focus', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
   if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
   const linhas = l.json && Array.isArray(l.json.value) ? l.json.value : null;
@@ -381,8 +387,8 @@ export function consultaFocus(resp, indicador) {
 }
 
 // SIDRA: uma consulta (IPCA). A primeira linha é o cabeçalho descritivo, não dado.
-export function consultaSidra(resp) {
-  const l = lerRespostaHttp(resp);
+export function consultaSidra(resp, opcoes) {
+  const l = lerRespostaHttp(resp, (opcoes || {}).campo);
   const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
   if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
   if (!Array.isArray(l.json)) {

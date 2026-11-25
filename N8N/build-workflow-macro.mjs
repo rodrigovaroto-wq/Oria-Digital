@@ -59,7 +59,16 @@ const HTTP_TOLERANTE = { onError: 'continueRegularOutput', retryOnFail: true, ma
 //   - neverError: 4xx/5xx chegam como statusCode em vez de exceção;
 //   - timeout 60 s: chamada que nunca responde vira { error } (status nulo -> falhou)
 //     em vez de pendurar a execução.
-const HTTP_OPCOES = { response: { response: { fullResponse: true, neverError: true, responseFormat: 'text' } }, timeout: 60000 };
+//   - outputPropertyName EXPLÍCITO: com text + fullResponse o corpo NÃO vai em "body", vai
+//     neste campo (default "data" no HttpRequestV3, typeVersion 4.2). Fixar aqui e passar o
+//     mesmo nome aos nós Ler (CAMPO) impede que uma troca de default quebre a leitura em
+//     silêncio: o teste lê o campo DESTA opção no JSON gerado.
+const CAMPO_CORPO = 'corpo_cru';
+const CAMPO = JSON.stringify(CAMPO_CORPO);
+const HTTP_OPCOES = {
+  response: { response: { fullResponse: true, neverError: true, responseFormat: 'text', outputPropertyName: CAMPO_CORPO } },
+  timeout: 60000,
+};
 
 // 132 meses = 11 anos: cobre a média de 10 anos com folga para o ano corrente
 // incompleto. Rebaixar a janela inteira todo mês é de propósito — é assim que
@@ -251,7 +260,7 @@ const nodes = [
     jsCode: embutir(consultaSgs) + `
 let serie = null;
 try { serie = $('Séries a Coletar').item.json.__serie; } catch (e) { serie = null; }
-const c = consultaSgs($json, serie || 'SGS');
+const c = consultaSgs($json, serie || 'SGS', { campo: ${CAMPO} });
 return { json: { __serie: serie, __fonte: 'BCB/SGS', __corpo: c.dado, __consulta: c.consulta } };`,
   }),
 
@@ -275,7 +284,7 @@ return { json: { __serie: serie, __fonte: 'BCB/SGS', __corpo: c.dado, __consulta
 
   node('Ler SIDRA', 'n8n-nodes-base.code', 2, {
     jsCode: embutir(consultaSidra) + `
-const c = consultaSidra(($input.all()[0] || {}).json);
+const c = consultaSidra(($input.all()[0] || {}).json, { campo: ${CAMPO} });
 return [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: c.dado, __consulta: c.consulta } }];`,
   }),
 
@@ -308,7 +317,7 @@ return [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: c.dado, __con
     jsCode: embutir(consultaSgs, itensJuros) + `
 let ctx = {};
 try { ctx = $('Séries Juros').item.json; } catch (e) { ctx = {}; }
-const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { fonte: 'bcb_juros_modalidade', itens: itensJuros(ctx.__sgs, ctx.__nome) });
+const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { campo: ${CAMPO}, fonte: 'bcb_juros_modalidade', itens: itensJuros(ctx.__sgs, ctx.__nome) });
 if (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';
 return { json: { __consulta: c.consulta } };`,
   }),
@@ -344,7 +353,7 @@ return { json: { __consulta: c.consulta } };`,
     jsCode: embutir(consultaSgs, itensSgsExtra) + `
 let ctx = {};
 try { ctx = $('Séries SGS Extra').item.json; } catch (e) { ctx = {}; }
-const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { itens: itensSgsExtra(ctx.__sgs, ctx.__meta || {}) });
+const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { campo: ${CAMPO}, itens: itensSgsExtra(ctx.__sgs, ctx.__meta || {}) });
 if (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';
 return { json: { __consulta: c.consulta } };`,
   }),
@@ -388,7 +397,7 @@ return { json: { __consulta: c.consulta } };`,
     jsCode: embutir(consultaFocus) + `
 let serie = null;
 try { serie = $('Indicadores Focus').item.json.__serie; } catch (e) { serie = null; }
-const c = consultaFocus($json, serie || 'Focus');
+const c = consultaFocus($json, serie || 'Focus', { campo: ${CAMPO} });
 return { json: { __serie: serie, __corpo: c.dado, __consulta: c.consulta } };`,
   }),
 
