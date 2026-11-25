@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SERIES_MACRO, INDICADORES_FOCUS, numeroMacro, JUROS_PJ_SGS, JANELA_JUROS_MESES, SGS_EXTRA, JANELA_SGS_EXTRA } from '../lib/macro.mjs';
+import { SERIES_MACRO, INDICADORES_FOCUS, numeroMacro, JUROS_PJ_SGS, JANELA_JUROS_MESES, SGS_EXTRA, JANELA_SGS_EXTRA, SIDRA_SETORIAL, JANELA_SIDRA_SETORIAL } from '../lib/macro.mjs';
 
 // Executa os códigos REAIS dos nós Code do workflow gerado, com a semântica do
 // N8N ($input/$json/$()). O mesmo padrão de `workflow-sim.test.mjs`: o mirror
@@ -559,7 +559,8 @@ test('ordem: todo nó capaz de lançar só roda DEPOIS de todos os Registrar Con
   const lanca = workflow.nodes.filter((n) =>
     (n.type.endsWith('.code') && /\bthrow\b/.test(n.parameters.jsCode ?? ''))
     || (/httpRequest|postgres/.test(n.type) && n.onError !== 'continueRegularOutput')).map((n) => n.name);
-  assert.equal(registrar.length, 5, 'um registro por corrente: SGS, Focus, SIDRA, Juros e SGS Extra');
+  assert.equal(registrar.length, 6, 'um registro por corrente: SGS, Focus, SIDRA, Juros, SGS Extra e SIDRA Setorial');
+  assert.ok(registrar.includes('Registrar Consulta SIDRA Setorial'));
   assert.ok(registrar.includes('Registrar Consulta SGS Extra'));
   assert.ok(lanca.includes('Normalizar Observações') && lanca.includes('Normalizar Focus'), 'os dois que lançam de propósito');
 
@@ -581,6 +582,139 @@ test('ordem: todo nó capaz de lançar só roda DEPOIS de todos os Registrar Con
   }
 });
 
+
+// --- A3 fatia 4: IBGE/SIDRA setorial (ibge_sidra -> fato_externo) ---
+// Os corpos são as respostas REAIS da API do SIDRA de 25/11/2026 (fixtures versionadas), e
+// entram SÓ na forma real do nó HTTP do n8n: texto cru no campo da opção outputPropertyName.
+const fixSidra = (nome) => JSON.parse(readFileSync(join(__dirname, 'fixtures', 'sidra-setorial', nome + '.json'), 'utf8'));
+const FIX = ['pib', 'pim', 'pmc', 'pmcat', 'pms', 'emp'];
+const setorialDe = (i, corpoOuResp, { cru = false } = {}) => {
+  const s = SIDRA_SETORIAL[i];
+  const http = cru ? corpoOuResp : resp(200, typeof corpoOuResp === 'string' ? corpoOuResp : JSON.stringify(corpoOuResp));
+  return rodarCode('Ler SIDRA Setorial', {
+    itens: [http],
+    porNome: { 'Séries SIDRA Setorial': { __tabela: s.tabela, __variavel: s.variavel, __periodicidade: s.periodicidade } },
+  })[0].json.__consulta;
+};
+// DERIVAÇÃO (não é resposta real): troca o V de linhas da fixture real por um símbolo de
+// ausência do SIDRA. Os símbolos são os documentados pelo IBGE; a API de 25/11/2026 não
+// devolveu nenhum nestas 6 consultas, então não há corpo real com ausência para citar.
+const comAusencia = (nome, indices, simbolo) => {
+  const a = fixSidra(nome);
+  indices.forEach((k) => { a[k] = { ...a[k], V: simbolo }; });
+  return a;
+};
+
+test('A3.4: as 6 séries do SIDRA setorial, janela de 2 períodos, URL pelo catálogo', () => {
+  assert.deepEqual(SIDRA_SETORIAL.map((s) => s.tabela), [5932, 8888, 8880, 8882, 8688, 6323]);
+  const gerado = rodarCode('Séries SIDRA Setorial').map((i) => i.json);
+  assert.equal(gerado.length, 6);
+  assert.equal(JANELA_SIDRA_SETORIAL, 2);
+  gerado.forEach((g, i) => assert.match(g.__url, new RegExp(`/values/t/${SIDRA_SETORIAL[i].tabela}/n1/all/v/${SIDRA_SETORIAL[i].variavel}/p/last%202/`)));
+  assert.match(gerado[0].__url, /\/c11255\/all$/);
+});
+
+test('A3.4: a resposta REAL de cada tabela vira fatos (categoria = última dimensão) e 202 fatos no total', () => {
+  const esperado = [44, 54, 2, 22, 58, 22];
+  let total = 0;
+  FIX.forEach((nome, i) => {
+    const c = setorialDe(i, fixSidra(nome));
+    afirmarContrato(c, `sidra setorial ${nome}`);
+    assert.equal(c.fonte, 'ibge_sidra');
+    assert.equal(c.erro, null);
+    assert.equal(c.itens.length, esperado[i], `${nome}: nº de fatos`);
+    const s = SIDRA_SETORIAL[i];
+    for (const f of c.itens) {
+      assert.equal(f.chave, `sidra:${s.tabela}/${s.variavel}`);
+      assert.equal(f.valor.compoe, false);
+      assert.equal(f.valor.periodicidade, s.periodicidade);
+      assert.ok(typeof f.valor.valor === 'number' && f.valor.categoria_codigo && f.valor.categoria && f.valor.unidade && f.valor.serie);
+      assert.equal(f.referencia, `sidra.${s.tabela}.${s.variavel}:${f.valor.categoria_codigo}:${f.valor.periodo}`);
+      assert.equal(f.valor.ausentes_na_consulta, 0);
+    }
+    total += c.itens.length;
+  });
+  assert.equal(total, 202);
+  // categoria é a ÚLTIMA dimensão: no PMC por atividade é Atividades (D5), não Tipos de índice (D4)
+  const cat = setorialDe(3, fixSidra('pmcat')).itens[0].valor;
+  assert.equal(cat.categoria_codigo, '90671');
+  assert.match(cat.categoria, /^Combust/);
+  // trimestre móvel carrega o rótulo do IBGE, e a unidade é a da linha
+  const emp = setorialDe(5, fixSidra('emp')).itens[0].valor;
+  assert.equal(emp.unidade, 'Mil pessoas');
+  assert.match(emp.periodo_nome, /jun-jul-ago 2026/);
+  // o cabeçalho (posição 0) nunca vira fato
+  assert.ok(FIX.every((n, i) => setorialDe(i, fixSidra(n)).itens.every((f) => f.valor.categoria !== 'Brasil' && f.valor.valor !== 'Valor')));
+});
+
+test('A3.4: valor ausente ou sigiloso (-, .., ..., X) NÃO vira fato nem zero, e a ausência é CONTADA no fato', () => {
+  for (const simbolo of ['-', '..', '...', 'X']) {
+    const base = fixSidra('pim');
+    const c = setorialDe(1, comAusencia('pim', [1, 2], simbolo));
+    assert.equal(c.erro, null, simbolo);
+    assert.equal(c.itens.length, 54 - 2, `${simbolo}: as 2 linhas ausentes não podem virar fato`);
+    const ausentesCods = [1, 2].map((k) => `${base[k].D4C}:${base[k].D3C}`);
+    for (const f of c.itens) {
+      assert.equal(f.valor.ausentes_na_consulta, 2, 'o leitor tem de ver que a série tem buraco');
+      assert.deepEqual(f.valor.ausentes_em, ausentesCods);
+    }
+    for (const k of [1, 2]) {
+      assert.ok(!c.itens.some((f) => f.referencia === `sidra.8888.11602:${base[k].D4C}:${base[k].D3C}`), `${simbolo}: a categoria ausente virou fato`);
+    }
+    assert.ok(!c.itens.some((f) => f.valor.valor === 0 && base.slice(1).every((r) => Number(r.V) !== 0)), `${simbolo}: ausência virou zero`);
+  }
+  // zero MEDIDO é fato: "0" é valor, não ausência
+  const z = fixSidra('pmc'); z[1] = { ...z[1], V: '0' };
+  const cz = setorialDe(2, z);
+  assert.equal(cz.itens.length, 2);
+  assert.equal(cz.itens.find((f) => f.valor.valor === 0).valor.ausentes_na_consulta, 0);
+});
+
+test('A3.4: falhou nunca vira "nada encontrado" - 500, sem resposta, 200 só cabeçalho, tudo ausente', () => {
+  const soCab = [fixSidra('pib')[0]];
+  const tudoAus = fixSidra('pmc'); tudoAus.slice(1).forEach((r, k) => { tudoAus[k + 1] = { ...r, V: '...' }; });
+  const casos = {
+    '500': resp(500, 'x'), 'sem resposta': { error: { message: 'timeout' } }, 'vazio': resp(200, ''),
+    'não-JSON': resp(200, '<html/>'), 'lista vazia': resp(200, '[]'), 'objeto de erro': resp(200, '{"error":"x"}'),
+    '200 só cabeçalho (DERIVADO da fixture pib)': resp(200, JSON.stringify(soCab)),
+    '200 todos ausentes (DERIVADO da fixture pmc)': resp(200, JSON.stringify(tudoAus)),
+    'corpo em body em vez de no campo': { headers: {}, statusCode: 200, body: JSON.stringify(fixSidra('pib')) },
+  };
+  for (const [rotulo, h] of Object.entries(casos)) {
+    for (let i = 0; i < 6; i++) {
+      const c = setorialDe(i, h, { cru: true });
+      afirmarContrato(c, `sidra setorial ${i} ${rotulo}`);
+      assert.ok(!(c.http_status >= 200 && c.http_status <= 299) || c.erro, `${i} ${rotulo}: chegaria como 2xx limpo`);
+      assert.equal(c.itens, null, `${i} ${rotulo}: não pode ter fatos`);
+    }
+  }
+  assert.equal(setorialDe(0, resp(500, 'x'), { cru: true }).http_status, 500);
+  assert.equal(setorialDe(0, { error: 'x' }, { cru: true }).http_status, null);
+  // a falha de UMA série não é escondida pelas outras
+  const cs = FIX.map((n, i) => setorialDe(i, i === 4 ? resp(500, 'boom') : JSON.stringify(fixSidra(n)), { cru: i === 4 }));
+  assert.equal(cs.filter((c) => c.http_status === 500).length, 1);
+  assert.equal(cs.filter((c) => c.itens && c.itens.length > 0).length, 5);
+});
+
+test('A3.4: topologia - só registra, antes de qualquer nó que lança, e nunca chega a indice_macro_obs', () => {
+  const c = workflow.connections;
+  const alvo = (n) => c[n].main[0].map((x) => x.node);
+  assert.deepEqual(alvo('Registrar Consulta SGS Extra'), ['Séries SIDRA Setorial']);
+  assert.deepEqual(alvo('Séries SIDRA Setorial'), ['IBGE SIDRA Setorial']);
+  assert.deepEqual(alvo('IBGE SIDRA Setorial'), ['Ler SIDRA Setorial']);
+  assert.deepEqual(alvo('Ler SIDRA Setorial'), ['Registrar Consulta SIDRA Setorial']);
+  assert.deepEqual(alvo('Registrar Consulta SIDRA Setorial'), ['Séries a Coletar']);
+  const leitores = workflow.nodes.filter((n) => /SIDRA Setorial/.test(n.parameters.jsCode ?? '') && !/Setorial/.test(n.name));
+  assert.deepEqual(leitores.map((n) => n.name), [], 'só a corrente setorial consome a setorial');
+  const reg = nodeDe('Registrar Consulta SIDRA Setorial');
+  assert.equal(reg.onError, 'continueRegularOutput');
+  assert.equal(reg.alwaysOutputData, true);
+  assert.equal(reg.parameters.options.queryBatching, 'independently');
+  const h = nodeDe('IBGE SIDRA Setorial');
+  assert.equal(h.onError, 'continueRegularOutput');
+  assert.equal(h.parameters.options.response.response.outputPropertyName, CAMPO_CORPO_NO);
+  assert.equal(workflow.nodes.length, 34);
+});
 
 // --- A3 fatia 2: IBC-Br, crédito/inadimplência PJ e euro (bcb_sgs -> fato_externo) ---
 const extraDe = (sgs, httpJson) => {
@@ -674,6 +808,7 @@ test('contrato HTTP -> Ler: a resposta boa, na forma do n8n para o nó gerado, �
     ['BCB Focus', 'Ler Focus', { 'Indicadores Focus': { __serie: 'IPCA' } }, focus],
     ['IBGE SIDRA (IPCA)', 'Ler SIDRA', {}, sidra],
     ['BCB Juros', 'Ler Juros', { 'Séries Juros': { __sgs: 20722, __nome: 'x' } }, JUROS_OK],
+    ['IBGE SIDRA Setorial', 'Ler SIDRA Setorial', { 'Séries SIDRA Setorial': { __tabela: 8880, __variavel: 11709, __periodicidade: 'mensal' } }, JSON.stringify(fixSidra('pmc'))],
     ['BCB SGS Extra', 'Ler SGS Extra', { 'Séries SGS Extra': { __sgs: 24363, __meta: { nome: 'x', natureza: 'indice', unidade: 'índice', periodicidade: 'mensal' } } }, JUROS_OK],
   ];
   for (const [http, ler, porNome, corpo] of pares) {

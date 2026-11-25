@@ -526,3 +526,88 @@ export function itensSgsExtra(sgs, meta) {
     });
   };
 }
+
+// ---------------------------------------------------------------------------
+// A3 fatia 4 — IBGE/SIDRA setorial (fonte ibge_sidra): PIB, indústria, varejo, serviços e
+// emprego por setor. Destino fato_externo (NÃO indice_macro_obs: a aba Macro do cliente é a A5),
+// mesmo desenho das fatias 1 e 2: uma consulta por série, só registro, na corrente linear
+// ANTES de qualquer nó que lance. Tabelas, variáveis e periodicidade conferidas na API de
+// metadados do IBGE e chamadas de verdade em 25/11/2026 (HTTP 200). O NOME da série não é
+// digitado aqui: vem do D2N que o próprio SIDRA devolve em cada linha (regra 1: nunca rotular
+// por suposição). Sem os 4 níveis do SIDRA fixos: a categoria SETORIAL é a ÚLTIMA dimensão Dn
+// do cabeçalho (PMC/PMS por atividade têm duas classificações, as outras uma).
+//
+// JANELA: p/last 2 = o último período + a revisão do anterior (igual à fatia 1). TETO conhecido:
+// fato_externo é imutável e a mesma janela é re-registrada todo dia. Medido na resposta real
+// de 25/11/2026: 44 + 54 + 2 + 22 + 58 + 22 = 202 fatos + 6 consultas = 208 linhas/dia
+// (o teste afirma 202). Com os 209 B médios por linha medidos em produção (pg_column_size), o
+// fato desta fonte é maior (categoria e nome da série vão no valor: 357 B só de chave, valor e referência, medidos nas 202 linhas reais; ~400 B com a linha): ~202 x 400 B
+// = ~80 KB/dia = ~29 MB/ano de 500 MB (banco em 112 MB). Subir a janela multiplica as linhas
+// (3 períodos = 303 fatos/dia). Histórico longo é fatia futura, se a Fase C pedir.
+// ---------------------------------------------------------------------------
+export const JANELA_SIDRA_SETORIAL = 2;
+
+export const SIDRA_SETORIAL = [
+  { tabela: 5932, variavel: 6561, classes: '/c11255/all', periodicidade: 'trimestral' },
+  { tabela: 8888, variavel: 11602, classes: '/c544/all', periodicidade: 'mensal' },
+  { tabela: 8880, variavel: 11709, classes: '/c11046/56734', periodicidade: 'mensal' },
+  { tabela: 8882, variavel: 11709, classes: '/c11046/56734/c85/all', periodicidade: 'mensal' },
+  { tabela: 8688, variavel: 11624, classes: '/c11046/56726/c12355/all', periodicidade: 'mensal' },
+  // PNAD Contínua: trimestre MÓVEL (o código D3C AAAAMM é o último mês do trimestre).
+  { tabela: 6323, variavel: 4090, classes: '/c888/all', periodicidade: 'trimestre_movel' },
+];
+
+export function urlSidraSetorial(s, n = JANELA_SIDRA_SETORIAL) {
+  return `${SIDRA_BASE}/t/${s.tabela}/n1/all/v/${s.variavel}/p/last%20${n}${s.classes}`;
+}
+
+// Uma consulta por série. A primeira linha do SIDRA é o cabeçalho descritivo, não dado.
+// Valor ausente ou sigiloso ("-", "..", "...", "X") NÃO vira fato e nunca vira 0
+// (numeroMacro devolve null); as linhas assim são CONTADAS e o número, mais onde
+// ocorreram, vai em cada fato da consulta (ausentes_na_consulta, ausentes_em), para o
+// leitor saber que a série tem buraco em vez de supor completude. Zero fato num 2xx
+// nunca vira "nada encontrado": é erro (falhou), como em consultaSgs.
+export function consultaSidraSetorial(resp, meta, opcoes) {
+  const m = meta || {};
+  const l = lerRespostaHttp(resp, (opcoes || {}).campo);
+  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  if (!Array.isArray(l.json)) {
+    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';
+    return { consulta: c, dado: null };
+  }
+  c.registros_lidos = l.json.length;
+  const cab = l.json[0] || {};
+  let ultima = 0;
+  for (const k of Object.keys(cab)) {
+    const mk = k.match(/^D(\d+)C$/);
+    if (mk && Number(mk[1]) > ultima) ultima = Number(mk[1]);
+  }
+  if (ultima < 4) {
+    c.erro = 'HTTP ' + l.http_status + ' com cabeçalho SIDRA sem dimensão de categoria (D4 em diante) em ' + l.json.length + ' linhas lidas';
+    return { consulta: c, dado: null };
+  }
+  const fatos = [];
+  const ausentes = [];
+  for (const o of l.json.slice(1)) {
+    const per = String((o && o.D3C) || '');
+    const cod = String((o && o['D' + ultima + 'C']) || '');
+    const v = numeroMacro(o && o.V);
+    if (v === null || !/^\d{6}$/.test(per) || cod === '') { ausentes.push(cod + ':' + per); continue; }
+    fatos.push({
+      chave: 'sidra:' + m.tabela + '/' + m.variavel,
+      valor: {
+        periodo: per, periodo_nome: o.D3N, categoria_codigo: cod, categoria: o['D' + ultima + 'N'], valor: v,
+        unidade: o.MN, compoe: false, periodicidade: m.periodicidade, serie: o.D2N,
+      },
+      referencia: 'sidra.' + m.tabela + '.' + m.variavel + ':' + cod + ':' + per,
+    });
+  }
+  if (fatos.length === 0) {
+    c.erro = 'HTTP ' + l.http_status + ' sem nenhum valor numérico em ' + l.json.length + ' linhas lidas (cabeçalho incluído)';
+    return { consulta: c, dado: null };
+  }
+  for (const f of fatos) { f.valor.ausentes_na_consulta = ausentes.length; f.valor.ausentes_em = ausentes; }
+  c.itens = fatos;
+  return { consulta: c, dado: l.json };
+}

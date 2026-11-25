@@ -1,0 +1,47 @@
+[
+  {
+    "NC": "Nível Territorial (Código)",
+    "NN": "Nível Territorial",
+    "MC": "Unidade de Medida (Código)",
+    "MN": "Unidade de Medida",
+    "V": "Valor",
+    "D1C": "Brasil (Código)",
+    "D1N": "Brasil",
+    "D2C": "Variável (Código)",
+    "D2N": "Variável",
+    "D3C": "Mês (Código)",
+    "D3N": "Mês",
+    "D4C": "Tipos de índice (Código)",
+    "D4N": "Tipos de índice"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "2",
+    "MN": "%",
+    "V": "0.5",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "11709",
+    "D2N": "PMC - Variação mês/mesmo mês do ano anterior (M/M-12)",
+    "D3C": "202608",
+    "D3N": "agosto 2026",
+    "D4C": "56734",
+    "D4N": "Índice de volume de vendas no comércio varejista"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "2",
+    "MN": "%",
+    "V": "1.7",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "11709",
+    "D2N": "PMC - Variação mês/mesmo mês do ano anterior (M/M-12)",
+    "D3C": "202609",
+    "D3N": "setembro 2026",
+    "D4C": "56734",
+    "D4N": "Índice de volume de vendas no comércio varejista"
+  }
+]
