@@ -114,21 +114,38 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
 - Fonte 3 (SGS): **parcial** (`5e5c1d4`): IBC-Br, crédito e inadimplência PJ, euro PTAX. Ficaram de fora o INCC (nome não confirmado) e a série 7458 (parou em 2025).
 - Fonte 4 (IBGE/SIDRA setorial): **feita e em produção** (sessão 140: `7e2b1f8`, `f5147ab`). 6 séries: PIB por setor, PIM-PF, PMC (total e por atividade), PMS, ocupados por grupamento. Uma consulta `ibge_sidra` por série; dados só em `fato_externo`. Medido pela sessão 140 em produção: macro republicado com 34 nós; execução 10052 `success`, 43 consultas `encontrado` (7 de `ibge_sidra`), 202 fatos setoriais. Sem migration.
 - Fontes 5 a 9: **não feitas.** A CVM (fonte 5) só começa depois de medir o banco (113 MB em 25/11).
-- **Falta para a A3 fechar:** a 1ª execução AGENDADA em produção, de 26/11 06h (09:00 UTC), ainda NÃO CONFERIDA (agendada em `trig_01PbmDVYHXaVJrkBiqwhG9Qo`). E as fontes 5 a 9. Até a agenda ser conferida, as fontes da A3 têm medida só da execução manual por cópia.
+- **Agenda conferida em produção (26/11/2026, 09:30 UTC):** execução 10071 do workflow `UGhv57BU3YNukVxV`, `mode: trigger` (agenda, não webhook), `success`, de 09:00:47 a 09:01:03 UTC. Desde 08:55 UTC: 43 consultas, todas `encontrado` (12 `bcb_sgs`, 19 `bcb_juros_modalidade`, 5 `bcb_focus`, 7 `ibge_sidra`), nenhuma `falhou`; 267 fatos novos, 202 com `agregado`, `mes_final` e `otica`. Bate com o critério do passo 1.
+- **Falta para a A3 fechar:** as fontes 5 a 9.
 
 **Próximos 2 passos (definidos em 25/11/2026, sessão 140):**
 
 | Passo | O que | Critério de pronto | Quem |
 |---|---|---|---|
-| **1. Conferir a agenda** | A 1ª execução AGENDADA do macro (26/11, 06h = 09:00 UTC), já com a fonte 4. Conferida agendada para 26/11 às 09:30 UTC | 43 consultas `encontrado` desde 08:55 UTC (12 `bcb_sgs`, 19 `bcb_juros_modalidade`, 5 `bcb_focus`, 7 `ibge_sidra`); ~267 fatos novos (202 setoriais); a execução no n8n veio da agenda, não de webhook. Se não bater: diagnóstico antes de qualquer fonte nova | Claude (conferida); dono: nada |
+| **1. Conferir a agenda** — **FEITO 26/11** (execução 10071, ver acima) | A 1ª execução AGENDADA do macro (26/11, 06h = 09:00 UTC), já com a fonte 4. Conferida agendada para 26/11 às 09:30 UTC | 43 consultas `encontrado` desde 08:55 UTC (12 `bcb_sgs`, 19 `bcb_juros_modalidade`, 5 `bcb_focus`, 7 `ibge_sidra`); ~267 fatos novos (202 setoriais); a execução no n8n veio da agenda, não de webhook. Se não bater: diagnóstico antes de qualquer fonte nova | Claude (conferida); dono: nada |
 | **2. Fonte 5 — CVM (pares do setor)** | Cadastro e demonstrações das companhias abertas. Antes do código, medir o banco e o dono decidir o recorte | Catálogo `cvm_dados_abertos` com url e cadência de publicação; uma consulta por ARQUIVO baixado, com `registros_lidos` > 0 (fonte de lista); "falhou" visível; o tamanho do banco medido antes e depois | Dono decide o recorte; Claude implementa |
 
 **Medido para o passo 2 (25/11/2026, dados abertos da CVM):**
 
 - Cadastro: 2.680 linhas, 1,5 MB. Uma companhia aparece uma vez por mercado (bolsa, balcão): são 2.533 CNPJ únicos, 655 ativos.
 - DFP 2025: 12,9 MB zipado, **1.192.514 linhas** somando todos os CSV (consolidado e individual; BPA, BPP, DRE, DRA, DFC, DMPL, DVA; dois exercícios). Só o exercício ÚLTIMO: 595.476. Recortes menores, para comparação: consolidado em BPA, BPP, DRE e DFC_MI, 443 companhias e 244.012 linhas (dois exercícios); contas até o nível 3, só o último exercício, 43.387.
-- Só as contas até o nível 3 (ex.: `1.01.01`), no último exercício: 43 mil linhas por ano.
-- ITR 2026: 29,5 MB zipado. Não aberto: o número de linhas não foi medido.
+- ~~Só as contas até o nível 3 (ex.: `1.01.01`), no último exercício: 43 mil linhas por ano.~~ **Corrigido em 26/11:** 43.387 é a interseção (consolidado, BPA/BPP/DRE/DFC_MI, nível ≤ 3, último exercício). Nível ≤ 3 no consolidado inteiro, último exercício, são 147.444.
+- ITR 2026: 29,5 MB zipado. Medido na tabela abaixo.
+
+**Medido em 25/11/2026, 22h UTC (sessão 141): linhas e bytes reais por linha.** Arquivos baixados com `last-modified` de 22/11/2026 (DFP 2025, 12.898.422 B; ITR 2026, 29.511.192 B). Linhas contadas nos CSV de demonstração (sem `composicao_capital` e `parecer`, por isso a DFP dá 1.187.317 e não os 1.192.514 acima). O ITR 2026 traz três trimestres (31/03, 30/06, 30/09) e 650 CNPJ; a DFP, 672. Bytes por linha medidos carregando os dados INTEIROS num Postgres 16 local (produção é 17.6; o formato em disco de heap e `jsonb` é o mesmo), com índice:
+
+- formato `fato_externo` (chave + um JSON por linha + PK uuid + índice por consulta): **611 a 620 B/linha**. Conferência em produção: os 1.198 fatos de hoje têm 581 B/linha com índice (JSON menor).
+- tabela enxuta, colunas tipadas + índice (cnpj, data, conta): **152 a 189 B/linha**.
+- banco de produção: 113 MB (118.705.299 B em 26/11, 09:30 UTC), 387 MB livres no teto de 500 MB.
+
+| Recorte (último exercício) | Linhas DFP 2025 | Linhas ITR 2026 | MB/ano em `fato_externo` | MB/ano em tabela enxuta |
+|---|---|---|---|---|
+| Inteira (consolidado e individual, 7 demonstrações) | 595.476 | 1.685.112 | 350 + 993 = **1.343** | 93 + 261 = **354** |
+| (a) Consolidado, todas as demonstrações | 260.890 | 728.120 | 153 + 431 = **584** | 42 + 118 = **160** |
+| (b) Consolidado, BPA, BPP, DRE, DFC_MI | 122.006 | 368.099 | 71 + 215 = **286** | 22 + 65 = **87** |
+| (c) Consolidado, contas até nível 3 | 147.444 | 413.479 | 87 + 245 = **332** | 23 + 63 = **86** |
+| (b) ∩ (c) | 43.387 | 143.643 | ~115 (DERIVADO) | ~35 (DERIVADO) |
+
+As quatro primeiras linhas são tabelas carregadas e medidas; a última é linhas × B/linha medido, sem carga. O exercício PENÚLTIMO não entra em nenhuma: repete o ÚLTIMO do ano anterior. Leitura: a decisão (1) não cabe em formato nenhum; com ITR, só cabe em tabela enxuta e com recorte. **Aguarda o dono:** o recorte e o lugar (tabela própria ou `fato_externo`). Recomendação: (b) em tabela própria, 87 MB/ano.
 
 **DECIDIDO pelo dono em 25/11/2026:** (1) **DFP inteira**; (2) **ITR entra**; (3) **gravar pela proposta**: baixar só quando o arquivo da CVM mudar e registrar a consulta mesmo quando nada mudou.
 
